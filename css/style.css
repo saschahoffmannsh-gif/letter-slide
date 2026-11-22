@@ -1,181 +1,365 @@
 /*
- * Letter Slide – Platzhalter-Optik
+ * Letter Slide – Theme „Pastell-Candy“
+ * ====================================
+ * Reines CSS + Inline-SVG, keine Bilddateien, keine externen Fonts.
  * Mobil zuerst (iPhone hochkant ~375–430 px), skaliert bis Desktop.
- * Touch: Mindestgröße 44 px für alle Bedienelemente, keine Doppeltipp-Zoom,
- * keine Textauswahl, kein Tap-Highlight, kein Overscroll-Bounce.
+ * Touch: Bedienelemente >= 44 px, kein Doppeltipp-Zoom, keine Textauswahl,
+ * kein Tap-Highlight, kein Overscroll-Bounce.
+ *
+ * THEME ÄNDERN: nur die Variablen in :root anpassen.
  */
 :root {
-  --arrow: 44px;                 /* Breite/Höhe der Pfeil-Leisten (Touch-Ziel >= 44 px) */
+  /* --- Grundfarben --- */
+  --bg: #FBF3E4;                 /* Creme-Hintergrund */
+  --bg-dot: rgba(190, 150, 100, .07); /* dezente Punkt-Textur */
+  --ink: #4A3426;                /* dunkles Braun: Buchstaben, Text, Icons */
+  --ink-soft: #8A7262;
+  --card: #FFF9EF;               /* Creme-Karten (HUD, Dialoge) */
+  --card-edge: #EEDFC6;
+  --shadow: rgba(110, 78, 50, .16);
+
+  /* --- Titel --- */
+  --title-a: #F4878F;            /* LETTER (Koralle/Rosa) */
+  --title-a-deep: #D9636E;
+  --title-b: #B79BE6;            /* SLIDE (Lavendel) */
+  --title-b-deep: #9076C9;
+  --heart: #F5A0B0;
+
+  /* --- Kachel-Pastelle (Farbe je Buchstabe, bleibt beim Schieben stabil) --- */
+  --tile-0: #BFE6D3; --tile-0-deep: #93CDB2;   /* Mint */
+  --tile-1: #FCCDB4; --tile-1-deep: #EDA987;   /* Pfirsich */
+  --tile-2: #D8CCF3; --tile-2-deep: #B5A3E2;   /* Lavendel */
+  --tile-3: #FBE7A2; --tile-3-deep: #E9CB6E;   /* Butter */
+  --hit: #FFCF3A; --hit-deep: #F0A818; --hit-glow: rgba(255, 196, 40, .75); /* Treffer-Gold */
+  --select: #8B6FD0;
+
+  /* --- Pillen / Buttons --- */
+  --mint: #BFE6D3;  --mint-deep: #8FCBAE;
+  --peach: #FCCDB4; --peach-deep: #EBA585;
+  --lavender: #D8CCF3; --lavender-deep: #AF9BE0;
+  --sage: #C6DDAE;  --sage-deep: #9EC183;
+  --butter: #FBE7A2;
+  --cream-btn: #FFF6E6; --cream-btn-deep: #E8D7BA;
+  --arrow-v: #DCD1F4; --arrow-v-deep: #BBA9E6;  /* Pfeile oben/unten */
+  --arrow-h: #D3E5C2; --arrow-h-deep: #AFCB98;  /* Pfeile links/rechts */
+
+  /* --- Combo-Badge --- */
+  --combo-bg: #FFB36B; --combo-edge: #FFF1DC; --combo-ink: #B4461F; --combo-hot: #FF8A3D;
+  --combo-idle: #FFDDBE; --combo-idle-ink: #C27A55;   /* Combo-Badge ohne Kaskade */
+
+  /* --- Schrift --- */
+  --font: ui-rounded, "SF Pro Rounded", "Nunito", "Varela Round", "Arial Rounded MT Bold",
+          system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  /* --- Maße --- */
+  --arrow: 44px;                 /* Pfeil-Leisten (Touch-Ziel >= 44 px) */
   --pad-x: 8px;
+  --radius: 14px;
   --safe-t: env(safe-area-inset-top, 0px);
   --safe-r: env(safe-area-inset-right, 0px);
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-l: env(safe-area-inset-left, 0px);
-  /* Brett: so breit wie möglich (Platz für Pfeile + Ränder), aber passt auch in die Höhe */
-  --board: max(264px, min(440px,
+  /* Brett: so breit wie möglich, passt aber auch in die Höhe */
+  --board: max(264px, min(430px,
     calc(100vw - 2 * var(--arrow) - 2 * var(--pad-x) - var(--safe-l) - var(--safe-r)),
-    calc(100vh - 310px - var(--safe-t) - var(--safe-b))));
-  --bg: #f6f5f2;
-  --ink: #222;
-  --tile: #e2e2e2;
-  --tile-ink: #1d1d1d;
-  --accent: #3b6fd8;
-  --hit: #ffd400;
+    calc(100vh - 300px - var(--safe-t) - var(--safe-b))));
 }
 @supports (height: 100dvh) {
   :root {
-    --board: max(264px, min(440px,
+    --board: max(264px, min(430px,
       calc(100vw - 2 * var(--arrow) - 2 * var(--pad-x) - var(--safe-l) - var(--safe-r)),
-      calc(100dvh - 310px - var(--safe-t) - var(--safe-b))));
+      calc(100dvh - 300px - var(--safe-t) - var(--safe-b))));
   }
 }
 
+/* ------------------------------------------------------------------ Basis */
 * { box-sizing: border-box; }
 html {
-  -webkit-text-size-adjust: 100%;
-  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
   touch-action: manipulation;        /* kein Doppeltipp-Zoom */
   overscroll-behavior: none;         /* kein Bounce / Pull-to-Refresh */
   background: var(--bg);
 }
 body {
-  margin: 0;
-  min-height: 100vh;
-  min-height: 100dvh;
-  padding: max(10px, var(--safe-t)) max(var(--pad-x), var(--safe-r)) max(20px, var(--safe-b)) max(var(--pad-x), var(--safe-l));
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  background: var(--bg);
-  color: var(--ink);
-  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  margin: 0; min-height: 100vh; min-height: 100dvh;
+  padding: max(8px, var(--safe-t)) max(var(--pad-x), var(--safe-r)) max(16px, var(--safe-b)) max(var(--pad-x), var(--safe-l));
+  font-family: var(--font); font-weight: 700; color: var(--ink);
+  background-color: var(--bg);
+  background-image: radial-gradient(var(--bg-dot) 1px, transparent 1.4px);
+  background-size: 16px 16px;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
   overscroll-behavior: none;
   -webkit-user-select: none; user-select: none;
   -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
+  position: relative; overflow-x: hidden;
 }
-h1 { margin: 0; font-size: 1.5rem; letter-spacing: .04em; }
+svg.ic { width: 20px; height: 20px; flex: none; }
 
+/* ------------------------------------------------------------------ Titel */
+#top { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; width: min(100%, 520px); padding-top: 2px; }
+.title {
+  margin: 0; font-size: clamp(2rem, 10vw, 3rem); font-weight: 900; letter-spacing: .02em; line-height: 1.05;
+  white-space: nowrap;
+}
+.t-letter { color: var(--title-a); text-shadow: 0 1px 0 #fff, 0 3px 0 var(--title-a-deep), 0 6px 10px var(--shadow); }
+.t-slide  { color: var(--title-b); text-shadow: 0 1px 0 #fff, 0 3px 0 var(--title-b-deep), 0 6px 10px var(--shadow); }
+.tagline {
+  display: flex; align-items: center; gap: 6px; width: 78%; justify-content: center;
+  font-size: .78rem; color: var(--ink-soft); letter-spacing: .03em;
+}
+.tagline .dash { flex: 1; border-top: 2px dashed var(--heart); opacity: .75; }
+.tagline .heart { width: 14px; height: 14px; color: var(--heart); }
+/* Konfetti: ein paar winzige Punkte und Striche */
+.confetti { position: absolute; inset: 0; pointer-events: none; }
+.confetti i { position: absolute; display: block; border-radius: 3px; }
+.confetti i:nth-child(1) { left: 3%;  top: 18%; width: 14px; height: 4px; background: var(--title-a); transform: rotate(-25deg); }
+.confetti i:nth-child(2) { left: 6%;  top: 48%; width: 12px; height: 4px; background: #9BD3E8; transform: rotate(15deg); }
+.confetti i:nth-child(3) { left: 10%; top: 5%;  width: 6px;  height: 6px; border-radius: 50%; background: #F6B873; }
+.confetti i:nth-child(4) { left: 1%;  top: 70%; width: 5px;  height: 5px; border-radius: 50%; background: var(--title-b); }
+.confetti i:nth-child(5) { right: 4%; top: 15%; width: 14px; height: 4px; background: #9BD3E8; transform: rotate(-35deg); }
+.confetti i:nth-child(6) { right: 7%; top: 2%;  width: 6px;  height: 6px; border-radius: 50%; background: var(--title-b); }
+.confetti i:nth-child(7) { right: 2%; top: 45%; width: 12px; height: 4px; background: var(--title-a); transform: rotate(20deg); }
+.confetti i:nth-child(8) { right: 9%; top: 68%; width: 5px;  height: 5px; border-radius: 50%; background: #F6D36B; }
+
+/* ------------------------------------------------------------------ Pillen-Buttons */
 button {
-  font: inherit; border: 0; border-radius: 10px; cursor: pointer;
-  background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.18);
-  min-height: 44px; min-width: 44px; padding: 8px 14px;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
+  font: inherit; font-weight: 800; color: var(--ink); cursor: pointer;
+  border: 0; min-height: 44px; min-width: 44px;
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
 }
-@media (hover: hover) { button:hover:not(:disabled) { background: #eef2fb; } }
-button:active:not(:disabled) { transform: translateY(1px); filter: brightness(.95); }
-button:disabled { opacity: .45; cursor: default; }
-button.active { background: var(--accent); color: #fff; }
-
-.row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; align-items: center; }
-
-/* HUD */
-#hud { display: grid; grid-template-columns: repeat(4, auto); gap: 6px; }
-.stat { background: #fff; border-radius: 8px; padding: 6px 12px; text-align: center;
-        box-shadow: 0 1px 3px rgba(0,0,0,.12); min-width: 72px; }
-.stat .label { font-size: .7rem; text-transform: uppercase; opacity: .6; letter-spacing: .05em; }
-.stat .value { font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
-#stat-combo { transition: background-color .2s, color .2s, transform .15s; }
-#stat-combo.bump { transform: scale(1.15); }
-#top { display: flex; flex-direction: column; align-items: center; gap: 10px; }
-
-/* Schmale Displays (iPhone hochkant): alles kompakter, damit Brett + Buttons ohne Scrollen passen */
-@media (max-width: 480px) {
-  body { gap: 8px; }
-  #top { flex-direction: row; flex-wrap: wrap; justify-content: space-between; width: 100%; gap: 6px; }
-  h1 { font-size: 1.15rem; }
-  #mode-buttons { gap: 6px; }
-  #mode-buttons button { padding: 6px 12px; font-size: .95rem; }
-  #hud { grid-template-columns: 1.6fr 1fr 1fr 1fr; width: 100%; gap: 4px; }
-  .stat { padding: 3px 4px; min-width: 0; }
-  .stat .label { font-size: .62rem; }
-  .stat .value { font-size: 1rem; }
-  .stat-mode .value { font-size: .8rem; line-height: 1.25rem; overflow: hidden; text-overflow: ellipsis; }
-  #controls { gap: 6px; }
-  #controls button { padding: 6px 10px; font-size: .92rem; }
-  .help { font-size: .72rem; }
+button { transition: opacity .15s; }
+button:disabled { opacity: .5; cursor: default; transition: opacity .2s .25s; } /* verzögert: kein Flackern bei kurzen Zügen */
+.pill {
+  --c: var(--cream-btn); --d: var(--cream-btn-deep);
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 8px 18px; border-radius: 999px;
+  background: var(--c); box-shadow: inset 0 2px 0 rgba(255,255,255,.65), 0 4px 0 var(--d), 0 7px 12px var(--shadow);
+  text-transform: uppercase; letter-spacing: .03em;
+  transition: transform .08s, box-shadow .08s, filter .12s, opacity .15s;
 }
+.pill:active:not(:disabled) { transform: translateY(3px); box-shadow: inset 0 2px 0 rgba(255,255,255,.65), 0 1px 0 var(--d), 0 3px 6px var(--shadow); }
+@media (hover: hover) { .pill:hover:not(:disabled) { filter: brightness(1.03) saturate(1.05); } }
+.pill-mint     { --c: var(--mint);     --d: var(--mint-deep); }
+.pill-peach    { --c: var(--peach);    --d: var(--peach-deep); }
+.pill-lavender { --c: var(--lavender); --d: var(--lavender-deep); }
+.pill-sage     { --c: var(--sage);     --d: var(--sage-deep); }
+.pill-cream    { --c: var(--cream-btn); --d: var(--cream-btn-deep); }
+.pill-sm { padding: 6px 12px; font-size: .8rem; gap: 5px; text-transform: none; letter-spacing: 0; }
+.pill-sm svg.ic { width: 17px; height: 17px; }
+.pill-icon { padding: 6px; width: 44px; }
 
-/* Spielfeld: 3x3-Raster aus Pfeil-Leisten und Brett */
+/* ------------------------------------------------------------------ Menü-Zeile */
+.menu { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; }
+.seg {
+  display: inline-flex; gap: 2px; padding: 2px; border-radius: 999px;
+  background: var(--card); box-shadow: inset 0 0 0 2px var(--card-edge), 0 3px 8px var(--shadow);
+}
+.seg button {
+  padding: 6px 12px; border-radius: 999px; background: transparent; font-size: .85rem; min-height: 44px;
+  color: var(--ink-soft); transition: background-color .15s, color .15s;
+}
+.seg button.active { background: var(--lavender); color: var(--ink); box-shadow: inset 0 -2px 0 var(--lavender-deep); }
+#btn-mute.muted svg { opacity: .6; }
+
+/* ------------------------------------------------------------------ HUD */
+#hud {
+  display: grid; grid-template-columns: 1fr 1.15fr 1fr; gap: 8px; align-items: center;
+  width: calc(var(--board) + 2 * var(--arrow)); max-width: 100%;
+}
+.hud-pill {
+  display: flex; align-items: center; justify-content: center; gap: 8px; height: 52px; padding: 0 12px;
+  border-radius: 18px; font-variant-numeric: tabular-nums;
+}
+.hud-pill .value { font-size: 1.55rem; font-weight: 900; line-height: 1; }
+.hud-ic { width: 28px; height: 28px; flex: none; }
+.hud-score { background: var(--sage); box-shadow: inset 0 2px 0 rgba(255,255,255,.55), 0 4px 0 var(--sage-deep), 0 6px 12px var(--shadow); }
+.hud-moves { background: var(--card); box-shadow: inset 0 0 0 2px var(--card-edge), 0 4px 0 var(--card-edge), 0 6px 12px var(--shadow); }
+.hud-moves .stack { display: flex; flex-direction: column; align-items: center; line-height: 1; gap: 2px; }
+.hud-moves .label { font-size: .68rem; letter-spacing: .08em; color: var(--ink-soft); }
+.hud-moves .value { font-size: 1.35rem; }
+
+/* Combo als orangefarbene Wolke; pulsiert bei Kaskaden */
+.hud-combo {
+  position: relative; height: 58px; display: flex; align-items: center; justify-content: center;
+  transition: transform .18s cubic-bezier(.3,1.8,.5,1), filter .2s;
+}
+.hud-combo .cloud { position: absolute; inset: 0; width: 100%; height: 100%; filter: drop-shadow(0 4px 6px var(--shadow)); }
+.combo-text { position: relative; display: flex; flex-direction: column; align-items: center; line-height: 1; color: var(--combo-ink); }
+.combo-text .label { font-size: .68rem; letter-spacing: .06em; }
+.combo-text .value { font-size: 1.3rem; font-weight: 900; }
+.hud-combo[data-level="0"], .hud-combo[data-level="1"] { --combo-bg: var(--combo-idle); }
+.hud-combo[data-level="0"] .combo-text, .hud-combo[data-level="1"] .combo-text { color: var(--combo-idle-ink); }
+.hud-combo[data-level="3"] { --combo-bg: #FF9F57; }
+.hud-combo[data-level="4"], .hud-combo[data-level="5"] { --combo-bg: var(--combo-hot); }
+.hud-combo.bump { transform: scale(1.18) rotate(-3deg); }
+
+/* ------------------------------------------------------------------ Spielfeld */
 #playfield {
-  position: relative;
-  display: grid;
+  position: relative; display: grid;
   grid-template-columns: var(--arrow) var(--board) var(--arrow);
   grid-template-rows: var(--arrow) var(--board) var(--arrow);
 }
 .arrows { display: grid; }
 .arrows.h { grid-template-columns: repeat(6, 1fr); }
 .arrows.v { grid-template-rows: repeat(6, 1fr); }
-/* Pfeil-Buttons füllen ihre Zelle komplett (großes Touch-Ziel), sichtbar ist nur der Innenteil */
-.arrows button.arrow {
-  width: 100%; height: 100%; min-width: 0; min-height: 0; margin: 0; padding: 4px;
-  font-size: .95rem; color: #555;
-  background: transparent; box-shadow: none; border-radius: 12px;
-  background-image: linear-gradient(#fff, #fff);
-  background-clip: content-box; background-origin: content-box;
-}
-.arrows button.arrow:active:not(:disabled) { background-image: linear-gradient(#d6dff3, #d6dff3); }
 #arrows-top { grid-area: 1 / 2; } #arrows-bottom { grid-area: 3 / 2; }
 #arrows-left { grid-area: 2 / 1; } #arrows-right { grid-area: 2 / 3; }
+/* Randpfeil: ganze Zelle ist Trefferfläche, sichtbar ist das kleine Pastell-Quadrat */
+button.arrow {
+  width: 100%; height: 100%; min-width: 0; min-height: 0; margin: 0; padding: 0;
+  background: transparent; display: flex; align-items: center; justify-content: center;
+}
+.arrow-key {
+  --c: var(--arrow-v); --d: var(--arrow-v-deep);
+  width: 30px; height: 28px; border-radius: 9px; display: flex; align-items: center; justify-content: center;
+  background: var(--c); box-shadow: inset 0 2px 0 rgba(255,255,255,.6), 0 3px 0 var(--d), 0 4px 6px var(--shadow);
+  transition: transform .08s, box-shadow .08s;
+}
+#arrows-left .arrow-key, #arrows-right .arrow-key { --c: var(--arrow-h); --d: var(--arrow-h-deep); width: 28px; height: 30px; }
+.arrow-key svg { width: 18px; height: 18px; color: var(--ink); }
+.arrow-key.dir-down svg { transform: rotate(180deg); }
+.arrow-key.dir-left svg { transform: rotate(-90deg); }
+.arrow-key.dir-right svg { transform: rotate(90deg); }
+button.arrow:active:not(:disabled) .arrow-key { transform: translateY(2px); box-shadow: inset 0 2px 0 rgba(255,255,255,.6), 0 1px 0 var(--d); }
 
 #board {
-  grid-area: 2 / 2;
-  position: relative; width: var(--board); height: var(--board);
-  background: #cfcfcf; border-radius: 10px;
+  grid-area: 2 / 2; position: relative; width: var(--board); height: var(--board);
+  border-radius: 16px; background: transparent;
   overflow: hidden;           /* clippt rein-/rausgleitende Kacheln */
   touch-action: none;         /* Wischgesten gehören dem Spiel, nicht dem Scrollen */
   -webkit-user-select: none; user-select: none;
 }
 /* Jede Kachel ist exakt eine Zelle groß -> translate(100%) = genau ein Feld */
-.tile {
-  position: absolute; width: calc(100% / 6); height: calc(100% / 6);
-  padding: 3px; will-change: transform;
-}
+.tile { position: absolute; width: calc(100% / 6); height: calc(100% / 6); padding: 3px 3px 6px; will-change: transform; }
 .tile .face {
-  width: 100%; height: 100%; border-radius: 7px; background: var(--tile); color: var(--tile-ink);
+  --c: var(--tile-0); --d: var(--tile-0-deep);
+  width: 100%; height: 100%; border-radius: 13px; background: var(--c); color: var(--ink);
   display: flex; align-items: center; justify-content: center;
-  font-weight: 800; font-size: calc(var(--board) / 6 * .55);
-  box-shadow: inset 0 -3px 0 rgba(0,0,0,.12);
-  transition: background-color .12s, transform .18s, opacity .18s;
+  font-weight: 900; font-size: calc(var(--board) / 6 * .52); line-height: 1;
+  box-shadow: inset 0 2px 0 rgba(255,255,255,.6), inset 0 -2px 0 rgba(0,0,0,.04), 0 4px 0 var(--d), 0 5px 7px var(--shadow);
+  transition: background-color .12s, transform .18s, opacity .18s, box-shadow .12s;
   cursor: pointer;
 }
-.tile.sel-line .face { background: #d6dff3; }
-.tile.sel .face { background: #b9c9ee; outline: 2px solid var(--accent); outline-offset: -2px; }
-.tile.hit .face { background: var(--hit); box-shadow: 0 0 14px 4px rgba(255,212,0,.9); transform: scale(1.06); }
-.tile.vanish .face { opacity: 0; transform: scale(.25); }
+.tile.c1 .face { --c: var(--tile-1); --d: var(--tile-1-deep); }
+.tile.c2 .face { --c: var(--tile-2); --d: var(--tile-2-deep); }
+.tile.c3 .face { --c: var(--tile-3); --d: var(--tile-3-deep); }
+.tile.sel-line .face { filter: brightness(1.05) saturate(1.15); }
+.tile.sel .face { outline: 3px solid var(--select); outline-offset: -3px; }
+/* Treffer: golden aufleuchten, dann weich ausblenden */
+.tile.hit .face {
+  --c: var(--hit); --d: var(--hit-deep);
+  background: radial-gradient(circle at 50% 35%, #FFF2B0 0%, var(--hit) 60%);
+  box-shadow: inset 0 2px 0 rgba(255,255,255,.7), 0 4px 0 var(--d), 0 0 9px 2px var(--hit-glow);
+  transform: scale(1.05);
+}
+.tile.vanish .face { opacity: 0; transform: scale(.3) rotate(8deg); }
 
-/* Wort-Einblendung und Combo-Pop über dem Brett */
+/* Wort-Einblendung: dicke Bonbon-Schrift */
 #word-flash {
-  position: absolute; inset: 0; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; pointer-events: none;
-  font-weight: 900; color: #111; text-shadow: 0 2px 0 #fff, 0 0 18px #fff;
-  opacity: 0; transform: scale(.7); transition: opacity .15s, transform .2s;
+  position: absolute; inset: 0; display: flex; flex-direction: column; gap: 6px;
+  align-items: center; justify-content: center; pointer-events: none; z-index: 3;
+  opacity: 0; transform: scale(.7); transition: opacity .15s, transform .2s cubic-bezier(.3,1.6,.5,1);
 }
 #word-flash.show { opacity: 1; transform: scale(1); }
-#word-flash .words { font-size: clamp(1.6rem, 9vw, 3.2rem); letter-spacing: .06em; text-align: center; }
-#word-flash .pts { font-size: 1.3rem; }
-#combo-pop {
-  position: absolute; top: calc(var(--arrow) + 8px); left: 50%; pointer-events: none;
-  transform: translateX(-50%) scale(.5); opacity: 0;
-  background: #ff7a00; color: #fff; font-weight: 900; padding: 4px 12px; border-radius: 999px;
-  transition: transform .18s cubic-bezier(.3,1.8,.5,1), opacity .18s;
+#word-flash .words {
+  -webkit-text-stroke: 7px #fff; paint-order: stroke fill;
+  font-size: clamp(1.8rem, 10vw, 3.3rem); font-weight: 900; letter-spacing: .05em; text-align: center;
+  color: var(--title-a); padding: 0 10px;
+  text-shadow: 0 5px 0 var(--title-a-deep), 0 8px 14px var(--shadow);
 }
-#combo-pop.show { transform: translateX(-50%) scale(1); opacity: 1; }
+#word-flash .pts {
+  font-size: 1.15rem; font-weight: 900; padding: 4px 14px; border-radius: 999px;
+  background: var(--sage); box-shadow: 0 3px 0 var(--sage-deep), 0 5px 10px var(--shadow);
+}
+#combo-pop {
+  position: absolute; top: calc(var(--arrow) + 6px); left: 50%; width: 150px; height: 70px; z-index: 4;
+  display: flex; align-items: center; justify-content: center; pointer-events: none;
+  transform: translateX(-50%) scale(.4) rotate(-8deg); opacity: 0;
+  transition: transform .2s cubic-bezier(.3,1.9,.5,1), opacity .15s;
+}
+#combo-pop .cloud { position: absolute; inset: 0; width: 100%; height: 100%; filter: drop-shadow(0 5px 8px var(--shadow)); }
+#combo-pop span { position: relative; font-size: 1.35rem; font-weight: 900; color: #fff; text-shadow: 0 2px 0 var(--combo-ink); }
+#combo-pop.show { transform: translateX(-50%) scale(1) rotate(-4deg); opacity: 1; }
 
 #ended-overlay {
-  grid-area: 2 / 2; z-index: 2; display: none; border-radius: 10px;
-  background: rgba(255,255,255,.82); flex-direction: column; align-items: center; justify-content: center;
-  gap: 6px; text-align: center; font-size: 1.1rem;
+  grid-area: 2 / 2; z-index: 2; display: none; border-radius: 16px;
+  background: rgba(251, 243, 228, .72); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+  align-items: center; justify-content: center;
 }
 #ended-overlay.show { display: flex; }
-#ended-overlay strong { font-size: 1.6rem; }
+#ended-overlay .card {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 16px 22px; text-align: center;
+  background: var(--card); border-radius: 20px; box-shadow: inset 0 0 0 2px var(--card-edge), 0 6px 0 var(--card-edge), 0 10px 20px var(--shadow);
+}
+#ended-overlay strong { font-size: 1.4rem; color: var(--title-a); }
+#ended-overlay small { color: var(--ink-soft); font-size: .78rem; }
 
-#controls button { padding: 8px 12px; }
-#share-panel { display: none; flex-direction: column; gap: 6px; align-items: center; width: min(520px, 100%); }
-#share-panel.show { display: flex; }
-#share-text {
+/* ------------------------------------------------------------------ Untere Buttons */
+.controls { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; width: calc(var(--board) + 2 * var(--arrow)); max-width: 100%; }
+.controls .pill { flex: 1 1 0; min-height: 52px; font-size: 1rem; padding: 8px 10px; }
+.controls .pill svg.ic { width: 22px; height: 22px; }
+
+.help { font-size: .76rem; color: var(--ink-soft); font-weight: 600; max-width: 520px; text-align: center; margin: 4px 0 0; }
+.deco { position: relative; width: min(100%, 520px); height: 34px; pointer-events: none; }
+.deco svg { position: absolute; bottom: 0; }
+.deco .leaf { width: 34px; height: 34px; }
+.deco .leaf-l { left: 2px; } .deco .leaf-r { right: 2px; transform: scaleX(-1); }
+.deco .heart { width: 14px; height: 14px; color: var(--heart); opacity: .8; }
+.deco .h1 { left: 46px; bottom: 2px; } .deco .h2 { right: 46px; bottom: 6px; }
+
+/* ------------------------------------------------------------------ Dialog (ersetzt confirm/alert) */
+.modal {
+  position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center;
+  padding: max(16px, var(--safe-t)) max(16px, var(--safe-r)) max(16px, var(--safe-b)) max(16px, var(--safe-l));
+  background: rgba(74, 52, 38, .28); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+  opacity: 0; transition: opacity .15s;
+}
+.modal[hidden] { display: none; }
+.modal.show { opacity: 1; }
+.modal-card {
+  width: min(360px, 100%); padding: 22px 20px 18px; border-radius: 26px; text-align: center;
+  background: var(--card); box-shadow: inset 0 0 0 2px var(--card-edge), 0 7px 0 var(--card-edge), 0 18px 34px rgba(74,52,38,.25);
+  transform: scale(.85) translateY(10px); transition: transform .2s cubic-bezier(.3,1.6,.5,1);
+}
+.modal.show .modal-card { transform: none; }
+.modal-card h2 { margin: 0 0 8px; font-size: 1.4rem; font-weight: 900; color: var(--title-a); text-shadow: 0 2px 0 #fff, 0 3px 0 rgba(217,99,110,.35); }
+#modal-body { font-size: 1rem; color: var(--ink); line-height: 1.4; }
+#modal-body p { margin: 0 0 10px; }
+#modal-body .stats { display: flex; gap: 8px; justify-content: center; margin: 6px 0 12px; }
+#modal-body .stats span { padding: 6px 12px; border-radius: 999px; background: var(--butter); font-weight: 900; }
+#modal-body .stats span:nth-child(2) { background: var(--mint); }
+#modal-body .stats span:nth-child(3) { background: var(--peach); }
+#modal-body textarea {
   width: 100%; font: inherit; font-size: 16px; /* >= 16px: iOS zoomt beim Fokussieren nicht */
-  padding: 8px; border-radius: 8px; border: 1px solid #ccc; resize: none;
+  font-weight: 800; color: var(--ink); text-align: center;
+  padding: 10px; border-radius: 16px; border: 2px dashed var(--lavender-deep); background: #fff; resize: none;
   -webkit-user-select: text; user-select: text;
 }
-#share-status { font-size: .85rem; min-height: 1.1em; opacity: .75; }
-.help { font-size: .8rem; opacity: .65; max-width: 520px; text-align: center; margin: 0; }
+#modal-body .status { min-height: 1.2em; margin-top: 6px; font-size: .85rem; color: var(--ink-soft); }
+#modal-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 14px; }
+#modal-actions .pill { flex: 1 1 0; min-width: 120px; }
+
+/* ------------------------------------------------------------------ Schmale Displays (iPhone hochkant) */
+@media (max-width: 480px) {
+  body { gap: 7px; }
+  .title { font-size: 2.15rem; }
+  .menu { gap: 5px; flex-wrap: nowrap; }
+  .seg button { padding: 6px 10px; font-size: .8rem; }
+  .pill-sm { padding: 6px 10px; font-size: .76rem; gap: 4px; }
+  .pill-sm svg.ic { width: 15px; height: 15px; }
+  #hud { gap: 6px; }
+  .hud-pill { height: 50px; padding: 0 8px; gap: 6px; }
+  .hud-pill .value { font-size: 1.35rem; }
+  .hud-moves .value { font-size: 1.2rem; }
+  .hud-ic { width: 24px; height: 24px; }
+  .controls { gap: 8px; }
+  .controls .pill { font-size: .9rem; gap: 6px; }
+  .help { font-size: .7rem; }
+}
+@media (max-width: 360px) {
+  .pill-sm span { display: none; }   /* ganz schmal: „Runde beenden“ nur als Icon (aria-label bleibt) */
+}
+@media (prefers-reduced-motion: reduce) {
+  .pill, .hud-combo, #word-flash, #combo-pop, .modal, .modal-card { transition: none; }
+}

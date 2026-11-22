@@ -37,21 +37,22 @@
         board: $("board"), mode: $("stat-mode"), moves: $("stat-moves"), score: $("stat-score"),
         combo: $("stat-combo"), comboValue: $("stat-combo-value"), flash: $("word-flash"),
         comboPop: $("combo-pop"), overlay: $("ended-overlay"), endedSummary: $("ended-summary"),
-        sharePanel: $("share-panel"), shareText: $("share-text"), shareStatus: $("share-status"),
-        modeButtons: $("mode-buttons")
+        modeButtons: $("mode-buttons"),
+        modal: $("modal"), modalTitle: $("modal-title"), modalBody: $("modal-body"), modalActions: $("modal-actions")
       };
       const specs = [
-        ["arrows-top", "▲", "col", -1, "Spalte %n nach oben"],
-        ["arrows-bottom", "▼", "col", +1, "Spalte %n nach unten"],
-        ["arrows-left", "◀", "row", -1, "Zeile %n nach links"],
-        ["arrows-right", "▶", "row", +1, "Zeile %n nach rechts"]
+        ["arrows-top", "up", "col", -1, "Spalte %n nach oben"],
+        ["arrows-bottom", "down", "col", +1, "Spalte %n nach unten"],
+        ["arrows-left", "left", "row", -1, "Zeile %n nach links"],
+        ["arrows-right", "right", "row", +1, "Zeile %n nach rechts"]
       ];
       for (const [id, glyph, axis, dir, label] of specs) {
         const box = $(id);
         for (let i = 0; i < GRID_SIZE; i++) {
           const b = document.createElement("button");
           b.type = "button";
-          b.textContent = glyph;
+          // Sichtbares Pastell-Quadrat mit Inline-SVG-Pfeil (Symbol #i-arrow in index.html)
+          b.innerHTML = `<span class="arrow-key dir-${glyph}"><svg aria-hidden="true"><use href="#i-arrow"/></svg></span>`;
           b.className = "arrow";
           b.setAttribute("aria-label", label.replace("%n", i + 1));
           b.addEventListener("click", () => onArrow(axis, i, dir));
@@ -66,12 +67,16 @@
         b.addEventListener("click", () => onModeClick(mode.id));
         this.el.modeButtons.appendChild(b);
       }
+      // Dialog: Escape bzw. Tippen auf den Hintergrund = Abbrechen
+      this.el.modal.addEventListener("pointerdown", (e) => { if (e.target === this.el.modal) this.closeModal("cancel"); });
+      document.addEventListener("keydown", (e) => { if (e.key === "Escape" && this.modalOpen) this.closeModal("cancel"); });
     },
 
     /** Eine Kachel an Zelle (r, c) erzeugen (Position in %, damit translate(100%) = ein Feld). */
     makeTile(letter, r, c) {
       const t = document.createElement("div");
-      t.className = "tile";
+      // Pastellfarbe hängt am Buchstaben -> bleibt beim Schieben/Fallen stabil
+      t.className = letter == null ? "tile" : `tile c${tileColor(letter)}`;
       t.style.left = `${(c * 100) / GRID_SIZE}%`;
       t.style.top = `${(r * 100) / GRID_SIZE}%`;
       t.dataset.r = r;
@@ -197,16 +202,9 @@
       this.el.score.textContent = override.score ?? state.score;
       const level = override.comboLevel ?? state.combo;
       this.el.comboValue.textContent = `×${formatMult(comboMultiplier(Math.max(level, 1)))}`;
-      // Farbe/Intensität steigt mit der Kaskadenstufe
+      // Farbe/Intensität steigt mit der Kaskadenstufe (Stile per data-level in style.css)
       const c = this.el.combo;
-      if (level >= 2) {
-        const k = Math.min(level - 1, 5);
-        c.style.backgroundColor = `hsl(${48 - k * 9}, 100%, ${70 - k * 5}%)`;
-        c.style.color = k >= 3 ? "#fff" : "";
-      } else {
-        c.style.backgroundColor = "";
-        c.style.color = "";
-      }
+      c.dataset.level = String(Math.min(level, 5));
       if (override.bump) {
         c.classList.add("bump");
         setTimeout(() => c.classList.remove("bump"), 160);
@@ -218,16 +216,80 @@
       }
     },
 
-    showShare(text, status) {
-      this.el.sharePanel.classList.add("show");
-      this.el.shareText.value = text;
-      this.el.shareStatus.textContent = status || "";
+    /* ---------------------------------------------------------------
+     * In-Game-Dialog (ersetzt confirm()/alert()).
+     * modal({ title, body, actions }) -> Promise mit dem `value` der gewählten Aktion
+     * (bzw. "cancel" bei Escape/Hintergrund).
+     *   body:    HTML-String oder DOM-Knoten
+     *   actions: [{ label, value, cls: "pill-mint"|"pill-peach"|..., icon: "i-share", keepOpen, onClick }]
+     *            keepOpen = Dialog bleibt offen, onClick(modalBody) wird aufgerufen
+     * ------------------------------------------------------------- */
+    modalOpen: false,
+    _modalResolve: null,
+
+    modal({ title, body = "", actions = [{ label: "OK", value: "ok", cls: "pill-mint" }] }) {
+      if (this.modalOpen) this.closeModal("cancel");
+      const { modal, modalTitle, modalBody, modalActions } = this.el;
+      modalTitle.textContent = title;
+      modalBody.textContent = "";
+      if (typeof body === "string") modalBody.innerHTML = body;
+      else if (body) modalBody.appendChild(body);
+      modalActions.textContent = "";
+      for (const a of actions) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = `pill ${a.cls || "pill-cream"}`;
+        b.dataset.value = a.value;
+        b.innerHTML = (a.icon ? `<svg class="ic" aria-hidden="true"><use href="#${a.icon}"/></svg>` : "") + `<span></span>`;
+        b.querySelector("span").textContent = a.label;
+        b.addEventListener("click", () => {
+          if (a.onClick) a.onClick(modalBody);
+          if (!a.keepOpen) this.closeModal(a.value);
+        });
+        modalActions.appendChild(b);
+      }
+      modal.hidden = false;
+      this.modalOpen = true;
+      requestAnimationFrame(() => modal.classList.add("show"));
+      const primary = modalActions.lastElementChild;
+      if (primary) primary.focus({ preventScroll: true });
+      return new Promise((res) => { this._modalResolve = res; });
     },
 
-    hideShare() {
-      this.el.sharePanel.classList.remove("show");
+    closeModal(value) {
+      if (!this.modalOpen) return;
+      const { modal } = this.el;
+      modal.classList.remove("show");
+      modal.hidden = true;
+      this.modalOpen = false;
+      const res = this._modalResolve;
+      this._modalResolve = null;
+      if (res) res(value);
     }
   };
+
+  /*
+   * Pastell-Index 0..3 je Buchstabe (0 Mint, 1 Pfirsich, 2 Lavendel, 3 Butter – Farben: --tile-0..3
+   * in style.css). Die Zuordnung verteilt die häufigen deutschen Buchstaben (E, N, I, S, R, A …)
+   * auf alle vier Farben, damit das Brett bunt gemischt aussieht. Hängt nur am Buchstaben,
+   * deshalb bleibt die Farbe beim Schieben und Fallen stabil.
+   */
+  const TILE_COLOR_BY_LETTER = {
+    E: 0, T: 0, L: 0, O: 0, K: 0, J: 0,
+    N: 1, A: 1, H: 1, G: 1, W: 1, Z: 1, X: 1,
+    I: 2, R: 2, C: 2, M: 2, F: 2, V: 2, Q: 2,
+    S: 3, D: 3, U: 3, B: 3, P: 3, Y: 3
+  };
+  function tileColor(letter) {
+    return TILE_COLOR_BY_LETTER[letter] ?? 0;
+  }
+
+  /** Kleiner HTML-Escaper für Dialog-Inhalte. */
+  function esc(str) {
+    return String(str).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
+  }
+  View.esc = esc;
+  View.formatMult = formatMult;
 
   root.LetterSlideView = View;
 })(typeof globalThis !== "undefined" ? globalThis : this);

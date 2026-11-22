@@ -69,6 +69,22 @@ Das Startbrett wird deterministisch so lange neu gewürfelt, bis es keine Wörte
   (Icon als Inline-SVG, keine Bilddatei). Hinweis: iOS nutzt für das Home-Icon kein SVG –
   dort erscheint ein Screenshot, bis ein PNG-`apple-touch-icon` ergänzt wird.
 
+## Design: „Pastell-Candy“
+
+Cremefarbener Hintergrund, Bonbon-Titel (LETTER koralle, SLIDE lavendel), Kacheln in Mint,
+Pfirsich, Lavendel und Butter mit dunkelbraunen Buchstaben, goldenes Aufleuchten bei Treffern,
+HUD als Pillen (Punkte mit Stern, Züge) plus orangefarbene Combo-Wolke. Alles reines CSS und
+Inline-SVG (Icons als `<symbol>` in `index.html`), keine Bilddateien, keine Webfonts
+(abgerundeter System-Font-Stack: `ui-rounded`, „SF Pro Rounded“, …).
+
+- **Theme ändern:** alle Farben, Schrift und Maße stehen als CSS-Variablen oben in
+  `css/style.css` (`--bg`, `--ink`, `--tile-0` … `--tile-3`, `--hit`, `--mint`, `--combo-bg` …).
+- **Kachelfarbe je Buchstabe:** Tabelle `TILE_COLOR_BY_LETTER` in `src/render.js`
+  (bleibt beim Schieben stabil, häufige Buchstaben sind auf alle vier Farben verteilt).
+- **Dialoge:** Bestätigung („Aktuelle Runde verwerfen?“), Teilen und Rundenende laufen über
+  ein eigenes In-Game-Modal (`View.modal()` in `src/render.js`) statt `confirm()`/`alert()`;
+  Escape oder Tippen auf den Hintergrund schließt.
+
 ## Ordnerstruktur
 
 ```
@@ -153,7 +169,7 @@ CHROME_PATH=/usr/bin/google-chrome npm run test:browser
 ```
 
 Er öffnet `index.html` per `file://` (keine JS-Fehler, Spielablauf über Pfeile, Tastatur,
-Undo, Moduswechsel, Rundenende, Teilen, Reset), prüft das Manifest über einen lokalen
+Undo, Moduswechsel samt In-Game-Dialog, Rundenende-Dialog, Teilen-Dialog, Reset; native Dialoge gelten als Fehler), prüft das Manifest über einen lokalen
 http-Server und emuliert ein **iPhone 14 mit Touch**: Viewport-Meta, kein Querscrollen,
 Touch-Ziele ≥ 44 px, Wischen waagerecht/senkrecht (je genau ein Zug), Tippen = Auswahl,
 Pfeil per Touch, Audio-Unlock.

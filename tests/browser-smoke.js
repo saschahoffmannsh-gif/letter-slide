@@ -21,12 +21,26 @@ async function openPage(browser, url, setup) {
   page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
   page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
   page.on("requestfailed", (r) => errors.push("requestfailed: " + r.url()));
-  page.on("dialog", (d) => d.accept()); // confirm() beim Moduswechsel
+  // Native Dialoge sind ersetzt (In-Game-Modal) -> jeder native Dialog ist ein Fehler
+  page.on("dialog", (d) => { errors.push("nativer Dialog: " + d.message()); d.accept(); });
   if (setup) await setup(page);
   await page.goto(url, { waitUntil: "load" });
   return { page, errors };
 }
 const idle = (page) => page.waitForFunction(() => !LetterSlideApp.busy, { timeout: 15000 });
+const modalVisible = (page) => page.$eval("#modal", (m) => !m.hidden && getComputedStyle(m).display !== "none");
+const waitModal = (page) => page.waitForFunction(() => { const m = document.getElementById("modal"); return !m.hidden && m.classList.contains("show"); }, { timeout: 5000 });
+const modalTitle = (page) => page.$eval("#modal-title", (e) => e.textContent);
+const shot = async (page, name) => { if (SHOTS) { await new Promise((r) => setTimeout(r, 250)); await page.screenshot({ path: path.join(SHOTS, name) }); } };
+/** Sucht einen Zug, der punktet, und liefert ihn (ohne den Zustand zu verändern). */
+const findScoringMove = (page) => page.evaluate(() => {
+  const g = LetterSlideApp.game;
+  for (const axis of ["row", "col"]) for (let i = 0; i < 6; i++) for (const d of [1, -1]) {
+    const clone = { ...g, grid: g.grid.slice(), rng: { state: g.rng.state }, history: [] };
+    if (LetterSlideLogic.performSlide(clone, axis, i, d).steps.length) return { axis, i, d };
+  }
+  return null;
+});
 const state = (page) => page.evaluate(() => ({ grid: LetterSlideApp.game.grid.join(""), moves: LetterSlideApp.game.moves, score: LetterSlideApp.game.score }));
 /** Erwartetes Ergebnis eines Zuges an einer Kopie des Zustands vorausberechnen. */
 const predict = (page, axis, i, dir) => page.evaluate((a, i, d) => {
@@ -41,7 +55,9 @@ async function desktopFile(browser) {
   const { page, errors } = await openPage(browser, "file://" + path.join(ROOT, "index.html"),
     (p) => p.setViewport({ width: 1000, height: 900 }));
   ok(await page.$$eval("#board .tile", (t) => t.length) === 36, "36 Kacheln sichtbar");
-  ok(await page.$$eval("button.arrow", (t) => t.length) === 24, "24 Randpfeile");
+  ok(await page.$$eval("button.arrow", (t) => t.length === 24 && t.every((b) => b.querySelector("svg use"))), "24 Randpfeile mit SVG-Icon");
+  ok(await page.$$eval("#board .tile", (t) => new Set(t.map((x) => [...x.classList].find((c) => /^c\d$/.test(c)))).size) >= 3, "Kacheln in mehreren Pastellfarben");
+  ok(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--tile-0").trim().toUpperCase() === "#BFE6D3"), "Theme-Variablen aktiv");
   ok((await page.$eval("#stat-mode", (e) => e.textContent)).startsWith("Tagesrätsel #"), "Modus Tagesrätsel");
   const start = (await state(page)).grid;
   ok(start === await page.evaluate(() => LetterSlideLogic.startDaily().grid.join("")), "Tagesbrett deterministisch");
@@ -73,19 +89,37 @@ async function desktopFile(browser) {
   ok(scored, "Treffer erzielt (Score " + (await state(page)).score + ")");
 
   await page.click('#mode-buttons button[data-mode="endless"]');
+  await waitModal(page);
+  ok(await modalTitle(page) === "Aktuelle Runde verwerfen?", "Moduswechsel fragt im In-Game-Dialog");
+  await shot(page, "desktop-modal-confirm.png");
+  await page.click('#modal-actions button[data-value="cancel"]');
+  ok(!(await modalVisible(page)) && (await state(page)).moves > 0, "Abbrechen behält die Runde");
+  await page.click('#mode-buttons button[data-mode="endless"]');
+  await waitModal(page);
+  await page.click('#modal-actions button[data-value="ok"]');
   ok(await page.$eval("#stat-mode", (e) => e.textContent) === "Endlos", "Endlos-Modus");
   ok((await state(page)).grid !== start, "Endlos-Brett anders");
   await page.click("#arrows-left button:nth-child(1)"); await idle(page);
   await page.click("#btn-end");
+  await waitModal(page);
+  ok(await modalTitle(page) === "Runde beendet", "Rundenende-Dialog");
   ok(await page.$eval("#ended-overlay", (e) => e.classList.contains("show")), "Runde beendet -> Overlay");
   ok(await page.$eval("button.arrow", (b) => b.disabled), "Pfeile gesperrt");
-  await page.click("#btn-share");
+  await shot(page, "desktop-modal-ende.png");
+  await page.click('#modal-actions button[data-value="share"]');
+  await page.waitForFunction(() => document.getElementById("modal-title").textContent === "Teilen");
   await new Promise((r) => setTimeout(r, 300));
-  const share = await page.$eval("#share-text", (e) => e.value);
+  const share = await page.$eval("#modal-body textarea", (e) => e.value);
   ok(/^Letter Slide Endlos · 1 Zug · \d+ Punkte/.test(share), "Teilen-Text: " + share);
+  ok(/kopiert/.test(await page.$eval("#modal-body .status", (e) => e.textContent)), "Teilen kopiert in die Zwischenablage");
+  await page.keyboard.press("Escape");
+  ok(!(await modalVisible(page)), "Escape schließt den Dialog");
+  await page.click("#btn-share"); await waitModal(page);
+  await page.click('#modal-actions button[data-value="ok"]');
+  ok(!(await modalVisible(page)), "Teilen-Button öffnet/schließt Dialog");
   await page.click("#btn-reset");
   ok((await state(page)).moves === 0 && !(await page.evaluate(() => LetterSlideApp.game.ended)), "Reset");
-  if (SHOTS) await page.screenshot({ path: path.join(SHOTS, "desktop.png") });
+  await shot(page, "desktop.png");
   ok(errors.length === 0, "keine JS-Fehler" + (errors.length ? ": " + errors.join(" | ") : ""));
   await page.close();
 }
@@ -168,7 +202,36 @@ async function iphone(browser) {
   await page.tap("#arrows-bottom button:nth-child(1)"); await idle(page);
   ok((await state(page)).moves === 3, "Randpfeil per Touch");
   ok(await page.evaluate(() => !!LetterSlideAudio.ctx), "AudioContext nach erster Berührung angelegt (iOS-Unlock)");
-  if (SHOTS) await page.screenshot({ path: path.join(SHOTS, "iphone.png") });
+  await shot(page, "iphone.png");
+
+  // Treffer-Animation festhalten (goldene Kacheln + Wort-Einblendung)
+  let mv = null;
+  for (let k = 0; k < 40 && !mv; k++) {
+    mv = await findScoringMove(page);
+    if (!mv) { await page.tap(`#arrows-right button:nth-child(${(k % 6) + 1})`); await idle(page); }
+  }
+  ok(!!mv, "Treffer-Zug gefunden");
+  if (mv) {
+    page.evaluate((m) => LetterSlideApp.handleSlide(m.axis, m.i, m.d), mv);
+    await page.waitForSelector("#board .tile.hit", { timeout: 3000 });
+    ok(true, "Treffer leuchten (.hit)");
+    if (SHOTS) await page.screenshot({ path: path.join(SHOTS, "iphone-treffer.png") });
+    await idle(page);
+  }
+
+  // Dialoge auf dem iPhone: Bestätigen + Teilen, Buttons >= 44 px, passt in den Viewport
+  await page.tap('#mode-buttons button[data-mode="endless"]');
+  await waitModal(page);
+  await new Promise((r) => setTimeout(r, 300)); // Einblend-Animation (scale) abwarten
+  const card = await page.$eval(".modal-card", (c) => { const r = c.getBoundingClientRect(); return { l: r.left, r: r.right, t: r.top, b: r.bottom }; });
+  ok(card.l >= 0 && card.r <= device.viewport.width && card.t >= 0 && card.b <= device.viewport.height, "Dialog passt auf den Bildschirm");
+  ok(await page.$$eval("#modal-actions button", (bs) => bs.every((b) => { const r = b.getBoundingClientRect(); return r.width >= 44 && r.height >= 44; })), "Dialog-Buttons >= 44 px");
+  await shot(page, "iphone-modal-confirm.png");
+  await page.tap('#modal-actions button[data-value="cancel"]');
+  await page.tap("#btn-share"); await waitModal(page);
+  await shot(page, "iphone-modal-teilen.png");
+  await page.tap('#modal-actions button[data-value="ok"]');
+  ok(!(await modalVisible(page)), "Dialog per Touch geschlossen");
   ok(errors.length === 0, "keine JS-Fehler" + (errors.length ? ": " + errors.join(" | ") : ""));
   await page.close();
 }

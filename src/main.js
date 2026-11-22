@@ -25,7 +25,8 @@
     btn.share.disabled = busy;
     for (const b of document.querySelectorAll("button.arrow")) b.disabled = busy || game.ended;
     btn.reset.title = game.modeId === "daily" ? "Tagesrätsel neu starten (gleiches Brett)" : "Gleiches Brett neu starten";
-    btn.mute.textContent = Sound.enabled ? "🔊" : "🔇";
+    btn.mute.querySelector("use").setAttribute("href", Sound.enabled ? "#i-sound" : "#i-mute");
+    btn.mute.classList.toggle("muted", !Sound.enabled);
     btn.mute.setAttribute("aria-label", Sound.enabled ? "Ton aus" : "Ton an");
   }
 
@@ -37,7 +38,7 @@
 
   /** Ein Zug inkl. aller Animationen (Slide -> je Kaskadenstufe: Treffer + Fallen). */
   async function handleSlide(axis, index, dir) {
-    if (busy || game.ended) return;
+    if (busy || game.ended || View.modalOpen) return;
     busy = true;
     refreshControls();
     Sound.click();
@@ -59,35 +60,84 @@
     }
   }
 
-  function confirmLeave() {
-    return game.moves === 0 || game.ended || root.confirm("Aktuelle Runde verwerfen?");
+  /** Bestätigung im In-Game-Dialog (statt confirm()). Liefert Promise<boolean>. */
+  async function confirmLeave() {
+    if (game.moves === 0 || game.ended) return true;
+    const choice = await View.modal({
+      title: "Aktuelle Runde verwerfen?",
+      body: `<p>Dein Fortschritt geht verloren.</p><div class="stats"><span>★ ${game.score}</span><span>${game.moves} ${game.moves === 1 ? "Zug" : "Züge"}</span></div>`,
+      actions: [
+        { label: "Abbrechen", value: "cancel", cls: "pill-cream" },
+        { label: "Verwerfen", value: "ok", cls: "pill-peach", icon: "i-reset" }
+      ]
+    });
+    return choice === "ok";
   }
 
-  function switchMode(modeId) {
-    if (busy || !confirmLeave()) return;
+  async function switchMode(modeId) {
+    if (busy || View.modalOpen) return;
+    if (!(await confirmLeave())) return;
     game = modeId === "daily" ? L.startDaily() : modeId === "endless" ? L.startEndless() : L.startMode(modeId);
-    View.hideShare();
     fullRender();
   }
 
-  /** Text in die Zwischenablage kopieren, mit Fallback (Textfeld + execCommand + alert). */
-  async function shareResult() {
-    const text = L.buildShareText(game);
+  /** Text kopieren: Clipboard-API, sonst markiertes Textfeld + execCommand. Liefert true/false. */
+  async function copyText(text, textarea) {
     try {
-      if (!navigator.clipboard || !root.isSecureContext) throw new Error("no clipboard");
-      await navigator.clipboard.writeText(text);
-      View.showShare(text, "In die Zwischenablage kopiert ✓");
-    } catch (e) {
-      View.showShare(text, "Bitte manuell kopieren.");
-      const ta = View.el.shareText;
-      ta.focus();
-      ta.select();
-      let ok = false;
-      try { ok = document.execCommand("copy"); } catch (_) { ok = false; }
-      if (ok) View.el.shareStatus.textContent = "In die Zwischenablage kopiert ✓";
-      else root.alert(text);
+      if (navigator.clipboard && root.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch (_) { /* Fallback unten */ }
+    try {
+      textarea.focus();
+      textarea.select();
+      return document.execCommand("copy");
+    } catch (_) {
+      return false;
     }
   }
+
+  /** Teilen-Dialog: Text anzeigen und direkt kopieren (statt alert()). */
+  async function shareResult() {
+    const text = L.buildShareText(game);
+    const body = document.createElement("div");
+    body.innerHTML = `<p>Ohne Spoiler – nur Züge, Punkte und Combo.</p><textarea rows="2" readonly></textarea><div class="status"></div>`;
+    const ta = body.querySelector("textarea");
+    const status = body.querySelector(".status");
+    ta.value = text;
+    const tryCopy = async () => {
+      const ok = await copyText(text, ta);
+      status.textContent = ok ? "In die Zwischenablage kopiert ✓" : "Bitte Text markieren und manuell kopieren.";
+    };
+    const done = View.modal({
+      title: "Teilen",
+      body,
+      actions: [
+        { label: "Kopieren", value: "copy", cls: "pill-lavender", icon: "i-share", keepOpen: true, onClick: tryCopy },
+        { label: "Fertig", value: "ok", cls: "pill-mint" }
+      ]
+    });
+    tryCopy();
+    return done;
+  }
+
+  /** Runde beenden: Score festhalten und Zusammenfassung im Dialog zeigen. */
+  async function endRoundDialog() {
+    L.endRound(game);
+    fullRender();
+    const fires = game.maxCombo > 0 ? "🔥".repeat(game.maxCombo) : "–";
+    const choice = await View.modal({
+      title: "Runde beendet",
+      body: `<p>${View.esc(MODES_TITLE())}</p><div class="stats"><span>★ ${game.score}</span><span>${game.moves} ${game.moves === 1 ? "Zug" : "Züge"}</span><span>${fires}</span></div>`,
+      actions: [
+        { label: "Schließen", value: "close", cls: "pill-cream" },
+        { label: "Teilen", value: "share", cls: "pill-lavender", icon: "i-share" }
+      ]
+    });
+    if (choice === "share") shareResult();
+  }
+  const MODES_TITLE = () => L.MODES[game.modeId].title(game);
 
   /** Web-Manifest nur über http(s) einbinden (über file:// würde der Browser einen CORS-Fehler loggen). */
   function linkManifest() {
@@ -104,18 +154,13 @@
   View.init(handleSlide, switchMode);
   Input.bind({
     onSlide: handleSlide,
-    onUndo: () => { if (!busy && L.undo(game)) fullRender(); },
-    onReset: () => { if (busy) return; L.reset(game); View.hideShare(); fullRender(); },
-    onEnd: () => {
-      if (busy || game.ended) return;
-      const text = L.endRound(game);
-      View.showShare(text, "Runde beendet – Score festgehalten. „Teilen“ kopiert den Text.");
-      fullRender();
-    },
-    onShare: () => { if (!busy) shareResult(); },
+    onUndo: () => { if (!busy && !View.modalOpen && L.undo(game)) fullRender(); },
+    onReset: () => { if (busy || View.modalOpen) return; L.reset(game); fullRender(); },
+    onEnd: () => { if (!busy && !game.ended && !View.modalOpen) endRoundDialog(); },
+    onShare: () => { if (!busy && !View.modalOpen) shareResult(); },
     onToggleMute: () => { Sound.setEnabled(!Sound.enabled); if (Sound.enabled) Sound.unlock(); refreshControls(); },
     onSelect: (r, c) => { View.selection = { r, c }; View.renderBoard(game.grid); },
-    isBusy: () => busy
+    isBusy: () => busy || View.modalOpen
   });
   linkManifest();
   fullRender();
@@ -124,6 +169,7 @@
   root.LetterSlideApp = {
     get game() { return game; },
     get busy() { return busy; },
+    get modalOpen() { return View.modalOpen; },
     handleSlide
   };
 })(typeof globalThis !== "undefined" ? globalThis : this);
