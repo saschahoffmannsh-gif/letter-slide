@@ -20,7 +20,7 @@
   const KEEP_DAYS = 60;
 
   function emptyStats() {
-    return { daily: {}, endlessBest: 0, progress: { unlocked: 1, best: {} }, tips: {}, prefs: { preview: true } };
+    return { daily: {}, endlessBest: 0, progress: { unlocked: 1, best: {} }, tips: {}, prefs: { preview: true }, tutorial: { done: {}, skipped: false } };
   }
 
   /** Stats laden; kaputte/fehlende Daten ergeben leere Stats statt eines Fehlers. */
@@ -43,6 +43,9 @@
       }
       if (data && data.tips && typeof data.tips === "object") for (const k of Object.keys(data.tips)) stats.tips[k] = true;
       if (data && data.prefs && typeof data.prefs.preview === "boolean") stats.prefs.preview = data.prefs.preview;
+      const tu = data && data.tutorial;
+      if (tu && tu.done && typeof tu.done === "object") for (const id of Object.keys(tu.done)) if (/^\d+$/.test(id) && tu.done[id]) stats.tutorial.done[id] = true;
+      if (tu && tu.skipped === true) stats.tutorial.skipped = true;
       return stats;
     } catch (_) {
       return emptyStats();

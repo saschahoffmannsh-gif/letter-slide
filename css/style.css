@@ -573,3 +573,58 @@ button.arrow:active:not(:disabled) .arrow-key { transform: translateY(2px); box-
   .bob { width: 42px; height: 42px; font-size: 1.45rem; }
   .pill-big { min-height: 66px; }
 }
+
+/* ------------------------------------------------------------------ Wortgarten: Lehr-Level (Coach Marks) */
+/* Sprechblase im Karten-Stil der Dialoge; Rest leicht abgedunkelt, geforderte Steuerung pulsiert sanft. */
+.coach { position: fixed; inset: 0; z-index: 45; pointer-events: none; }
+.coach[hidden] { display: none; }
+.coach-bubble {
+  position: absolute; width: min(330px, calc(100vw - 20px)); padding: 12px 14px 10px; border-radius: 22px;
+  background: var(--card); color: var(--ink); text-align: left; pointer-events: auto;
+  box-shadow: inset 0 0 0 2px var(--card-edge), 0 5px 0 var(--card-edge), 0 14px 28px rgba(74,52,38,.22);
+  opacity: 0; transform: translateY(6px) scale(.96); transition: opacity .18s, transform .22s cubic-bezier(.3,1.6,.5,1);
+}
+.coach.show .coach-bubble { opacity: 1; transform: none; }
+.coach.away .coach-bubble { opacity: 0; transform: translateY(4px) scale(.97); pointer-events: none; }
+.coach-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; font-size: .68rem; letter-spacing: .08em; font-weight: 900; }
+.coach-tag { color: var(--title-b-deep); text-transform: uppercase; }
+.coach-count { color: var(--ink-soft); }
+.coach-text { margin: 0 0 8px; font-size: .92rem; line-height: 1.35; }
+.coach-text b { color: var(--title-a-deep); }
+.coach-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.coach-skip { border: 0; background: none; color: var(--ink-soft); font: inherit; font-size: .8rem; font-weight: 800; padding: 10px 4px; min-height: 44px; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+.coach-next { min-height: 44px; padding: 6px 18px; font-size: .9rem; }
+.coach-do { font-size: .8rem; font-weight: 900; color: var(--title-b-deep); padding-right: 4px; }
+.coach-arrow { position: absolute; width: 16px; height: 16px; background: var(--card); transform: translateX(-50%) rotate(45deg); }
+.coach-bubble[data-place="below"] .coach-arrow { top: -8px; box-shadow: -2px -2px 0 0 var(--card-edge); }
+.coach-bubble[data-place="above"] .coach-arrow { bottom: -8px; box-shadow: 2px 2px 0 0 var(--card-edge); }
+/* Abdunkeln: nur Deckkraft/Sättigung – Formen und Farben bleiben */
+#game.coach-on .coach-dim { opacity: .34; filter: saturate(.7); transition: opacity .25s, filter .25s; }
+/* Chrome zeigt sonst unsichtbare (opacity 0) Overlays unter abgedunkelten Eltern blass an */
+#game.coach-on #combo-pop:not(.show), #game.coach-on #word-flash:not(.show), #game.coach-on #bloom:not(.show),
+#game.coach-on #hud.combo-quiet .hud-combo:not(.live) { visibility: hidden; }
+/* sanfter Puls in Lavendel (Auswahl-Ton) */
+@keyframes coach-pulse { 0%, 100% { transform: scale(1); filter: drop-shadow(0 0 0 rgba(139,111,208,0)); } 50% { transform: scale(1.08); filter: drop-shadow(0 0 7px rgba(139,111,208,.75)); } }
+.coach-pulse.arrow .arrow-key, .pill.coach-pulse, .tile.coach-pulse .face { animation: coach-pulse 1.3s ease-in-out infinite; }
+@keyframes coach-shake { 0%, 100% { translate: 0; } 20% { translate: -6px 0; } 40% { translate: 5px 0; } 60% { translate: -3px 0; } 80% { translate: 2px 0; } }
+.coach-shake { animation: coach-shake .42s ease-in-out; }
+.start-tutorial { min-height: 44px; padding: 6px 16px; font-size: .85rem; align-self: center; }
+.start-tutorial[hidden] { display: none; }
+
+/* Live-Fortschritt in den Slots: zarte „Geister“-Buchstaben (Lavendel wie die Schutz-Markierung) */
+.slot.ghost { color: var(--title-b-deep); background: var(--tile-sel-line); opacity: .9; box-shadow: inset 0 0 0 2px var(--lavender), 0 3px 0 var(--lavender-deep); }
+
+/* Combo-Wolke mit Zielwort: versteckt, erscheint nur während einer Kaskade über dem HUD */
+#hud.combo-quiet { position: relative; grid-template-columns: 1fr 1.15fr; }
+#hud.combo-quiet .hud-combo {
+  position: absolute; right: -4px; top: -8px; width: 34%; z-index: 6; pointer-events: none;
+  opacity: 0; transform: scale(.55) rotate(-6deg); transition: opacity .2s, transform .25s cubic-bezier(.3,1.8,.5,1);
+}
+#hud.combo-quiet .hud-combo.live { opacity: 1; transform: scale(1) rotate(-3deg); }
+#hud.combo-quiet .hud-combo.live.bump { transform: scale(1.15) rotate(-4deg); }
+
+@media (prefers-reduced-motion: reduce) {
+  .coach-pulse.arrow .arrow-key, .pill.coach-pulse, .tile.coach-pulse .face { animation: none; outline: 3px solid var(--select); outline-offset: 2px; }
+  .coach-shake { animation: none; }
+  .coach-bubble, #hud.combo-quiet .hud-combo { transition: none; }
+}

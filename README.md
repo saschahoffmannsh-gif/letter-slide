@@ -51,8 +51,36 @@ unverändert übernommen; neue Elemente nutzen dieselben Komponenten und Theme-V
 | **Freies Spiel** | Zufallsbrett ohne Zielwort, alle Modifikatoren aktiv – zum Ausprobieren |
 | **So geht's** | Regeln, Modifikator-Tabelle, Punkteformel |
 
-Tutorial-Popups erscheinen einmalig: Level 1 (Ziel), 4 (Stein), 7 (Brunnen), 10 (Trieb) und beim
-ersten Entstehen jedes Modifikators.
+### Lehr-Level (geführtes Tutorial)
+
+Beim ersten **„Level 1 spielen“** startet das Tutorial Schritt für Schritt: Eine kurze Sprechblase im
+Karten-Stil zeigt auf das passende Element (Hinweis, Slots, Pfeil, Kachel, Knopf), der Rest des
+Spiels wird leicht abgedunkelt, die geforderte Steuerung pulsiert sanft in Lavendel. **Nur die
+richtige Aktion ist erlaubt** – alles andere wackelt kurz und passiert nicht; danach geht es weiter.
+
+| Level | Inhalt |
+|---|---|
+| 1 | Hinweis, Länge und Slots; Schieben per Pfeil **und** Wischen; der eine Zug zu WAERME; Jubel + Punkte |
+| 2 | senkrechte Wörter; jeder Zug der Lösung geführt (Pfeil + Richtung); kurze Wörter zerbröseln; Fortschritt ist geschützt (lila) |
+| 3 | wo die Zielbuchstaben liegen, 2 Schubser, Slots als Fortschritt, Hinweis-Knopf – dann frei |
+| 4 / 7 / 10 | erster Stein / Brunnen / Trieb mit geführtem Zug, Karte auf der neuen Kachel, Vorschau-Auge und „Was passiert?“ |
+
+- **„Überspringen“** in jeder Blase schaltet das ganze Tutorial ab; dann übernehmen die bisherigen
+  kurzen Tipp-Popups als Rückfall. **„Tutorial wiederholen“** auf der Startseite und in „So geht's“.
+- Gespeichert in `localStorage` (`tutorial.done` je Level, `tutorial.skipped`). Ein geführtes Level
+  ersetzt seine Tipp-Popups (`covers`).
+- Alle geforderten Züge sind ein Präfix der Referenzlösung → deterministisch (geseedetes Nachfüllen);
+  `tests/tutorial.test.js` spielt jedes Skript bis „gelöst“ bzw. „Modifikator entstanden“ nach und
+  prüft, dass das Level danach lösbar bleibt.
+- Skripte ändern: `src/tutorial.js` (reine Daten: Text, Anker, geforderter Zug/Knopf, Bedingung).
+  Anzeige: `src/coach.js`, Ablauf: `src/main.js` (`runTutorial`, `gate`).
+
+### Live-Slots und Combo
+
+- Die Slots zeigen den eigenen Fortschritt: Buchstaben der aktuellen richtigen Teilfolge (dieselbe
+  wie die geschützten Felder) erscheinen **zart in Lavendel**; Hinweis-Buchstaben bleiben kräftig.
+- Die **Combo-Wolke** ist mit Zielwort (Level, Tagesrätsel) versteckt und springt nur während einer
+  echten Kaskade kurz ins HUD. Im Freien Spiel bleibt sie sichtbar.
 
 ### Level-Progression
 
@@ -179,6 +207,8 @@ letter-slide/                # Repo-Name bleibt (GitHub Pages-URL)
 ├── src/
 │   ├── config.js            # Wortliste, Gewichtung, Punkte, MODIFIER_RULES, Hinweise, MODES
 │   ├── levels.js            # die 12 Level (Zielwort, Hinweis, Grid, Modifikatoren, Referenzlösung)
+│   ├── tutorial.js          # Lehr-Level-Skripte (Daten, in Node ladbar)
+│   ├── coach.js             # Coach Marks: Sprechblase, Abdunkeln, Puls, Wackeln
 │   ├── logic.js             # reine Spiellogik (kein DOM, in Node ladbar)
 │   ├── stats.js             # Fortschritt, Bestwerte, Tagesrätsel, Tipps (localStorage)
 │   ├── audio.js             # WebAudio: Klick, Wort, Rieseln, Pflanzen, Vorschau-Ping, Aufblühen
@@ -193,6 +223,7 @@ letter-slide/                # Repo-Name bleibt (GitHub Pages-URL)
 ├── tests/
 │   ├── logic.test.js        # Regeln, Modifikatoren, Vorschau, Zielwort, Hinweise, Undo
 │   ├── levels.test.js       # Level-Daten, Progression, Lösbarkeit (Löser)
+│   ├── tutorial.test.js     # Lehr-Level-Skripte nachspielen
 │   ├── stats.test.js        # localStorage: Fortschritt, Tagesrätsel
 │   ├── browser-smoke.js     # optional: Headless-Chrome (Desktop + iPhone 14)
 │   └── perf-dissolve.js     # optional: fps beim Zerbröseln
@@ -200,7 +231,7 @@ letter-slide/                # Repo-Name bleibt (GitHub Pages-URL)
 └── .github/workflows/test.yml
 ```
 
-Ladereihenfolge: `config → levels → logic → stats → audio → particles → render → input → main`.
+Ladereihenfolge: `config → levels → tutorial → logic → stats → audio → particles → render → coach → input → main`.
 Die globalen Objekte heißen aus Kompatibilitätsgründen weiter `LetterSlideConfig`,
 `LetterSlideLevels`, `LetterSlideLogic`, … (`config`, `levels`, `logic`, `stats` auch per
 `module.exports` in Node).
@@ -253,7 +284,7 @@ Tests in `tests/logic.test.js` („targetScore …“) entsprechend anpassen.
 
 - **Wortliste:** `WORD_LIST_RAW` in `config.js` (993 Beispielwörter; vor einem Release prüfen).
 - **Buchstaben-Gewichtung fürs Nachfüllen:** `LETTER_WEIGHTS`, `USE_UNIFORM_LETTERS`.
-- **Tutorial-Texte:** `TIPS` oben in `src/main.js`.
+- **Tutorial:** Lehr-Level-Skripte in `src/tutorial.js`; Rückfall-Tipps (`TIPS`) oben in `src/main.js`.
 - **Theme:** CSS-Variablen oben in `css/style.css`.
 
 ## Tests
@@ -284,6 +315,9 @@ CHROME_PATH=/usr/bin/google-chrome SCREENSHOTS=./screenshots npm run test:browse
 Desktop + iPhone 14 (Touch): Startseite, Level 1 per Pfeil und per Wischen lösen, Abschluss-Dialog,
 „Nächstes Level“, Fortschritt, Hinweis, „Was passiert?“, Vorschau-Aufblitzen, Undo entfernt
 Modifikator, Brett mit allen drei Modifikatoren, Theme-Variablen unverändert, alles passt in den
-Bildschirm, Touch-Ziele ≥ 44 px, keine JS-Fehler.
+Bildschirm, Touch-Ziele ≥ 44 px, keine JS-Fehler. Lehr-Level (frischer Spieler, iPhone 14): Blasen
+auf dem Bildschirm, Abdunkeln, falsche Aktion blockiert + Wackeln, richtige Aktion (Wischen/Pfeil)
+führt weiter, Jubel + Abschluss-Dialog, L2-Zugführung, Geister-Slots, Überspringen, Wiederholen
+(Startseite und „So geht's“), L4 erster Stein mit Vorschau und „Was passiert?“, Combo versteckt.
 
 CI: `.github/workflows/test.yml` führt bei Push/PR die Syntaxprüfung und `npm test` (Node 20) aus.

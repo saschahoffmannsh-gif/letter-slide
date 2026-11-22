@@ -23,8 +23,8 @@ const keyOf = (s) => s.grid.join("") + s.cellMod.map((x) => (x ? x[0] : ".")).jo
 const isInverse = (a, b) => a && b && a.axis === b.axis && a.index === b.index && a.dir === -b.dir;
 
 /** Referenzlösung abspielen. @returns { state, log: [{ move, placed, words, solved }] } */
-function replay(level, moves) {
-  const state = L.loadLevel(level);
+function replay(level, moves, startState = null) {
+  const state = startState || L.loadLevel(level); // optional: von einem Zwischenstand aus weiterspielen
   const log = [];
   for (const s of moves) {
     const mv = decode(s);

@@ -93,3 +93,19 @@ test("Level-Fortschritt: Bestwert je Level, Freischalten, Gesamtpunkte", () => {
   assert.equal(back.tips.first_stein, true);
   assert.equal(back.prefs.preview, false);
 });
+
+test("Tutorial-Stand: geführte Level und Überspringen werden gespeichert", () => {
+  const st = memoryStorage();
+  const stats = S.emptyStats();
+  assert.deepEqual(stats.tutorial, { done: {}, skipped: false });
+  stats.tutorial.done[1] = true;
+  stats.tutorial.done[2] = true;
+  S.saveStats(st, stats);
+  assert.deepEqual(S.loadStats(st).tutorial, { done: { 1: true, 2: true }, skipped: false });
+  stats.tutorial.skipped = true;
+  S.saveStats(st, stats);
+  assert.equal(S.loadStats(st).tutorial.skipped, true);
+  // kaputte Daten -> Standard
+  const bad = memoryStorage({ [S.STORAGE_KEY]: JSON.stringify({ tutorial: { done: { x: 1, 3: true }, skipped: "ja" } }) });
+  assert.deepEqual(S.loadStats(bad).tutorial, { done: { 3: true }, skipped: false });
+});

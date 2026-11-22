@@ -16,7 +16,7 @@ let failures = 0;
 const ok = (cond, msg) => { console.log((cond ? "  ✓ " : "  ✗ ") + msg); if (!cond) failures++; };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function openPage(browser, device) {
+async function openPage(browser, device, seed = { tutorial: { done: {}, skipped: true } }) {
   const page = await browser.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
@@ -25,7 +25,9 @@ async function openPage(browser, device) {
   page.on("dialog", (d) => { errors.push("nativer Dialog: " + d.message()); d.accept(); });
   if (device) await page.emulate(device); else await page.setViewport({ width: 1280, height: 900 });
   await page.goto(URL, { waitUntil: "load" });
-  await page.evaluate(() => localStorage.clear());
+  // Standard: Tutorial übersprungen (prüft die klassischen Abläufe + Tipp-Popups als Rückfall);
+  // seed = null -> frischer Spieler (geführtes Lehr-Level).
+  await page.evaluate((seed) => { localStorage.clear(); if (seed) localStorage.setItem("wortgartenStats.v1", JSON.stringify(seed)); }, seed);
   await page.reload({ waitUntil: "load" });
   return { page, errors };
 }
@@ -56,6 +58,21 @@ const protectCheck = (page) => page.evaluate(() => {
   return { want, have };
 });
 const shot = async (page, name) => { if (SHOTS) await page.screenshot({ path: path.join(SHOTS, PREFIX + name) }); };
+const shotAs = async (page, file) => { if (SHOTS) await page.screenshot({ path: path.join(SHOTS, file) }); };
+
+/* ---------- Coach-Marks (Lehr-Level) ---------- */
+const coachInfo = (page) => page.evaluate(() => {
+  const w = document.getElementById("coach"), b = w.querySelector(".coach-bubble"), r = b.getBoundingClientRect();
+  return { on: !w.hidden && w.classList.contains("show") && !w.classList.contains("away"), text: w.querySelector(".coach-text").textContent,
+    count: w.querySelector(".coach-count").textContent, inView: r.top >= 0 && r.left >= 0 && r.bottom <= innerHeight && r.right <= innerWidth,
+    dimmed: document.querySelectorAll("#game.coach-on .coach-dim").length, pulse: [...document.querySelectorAll(".coach-pulse")].map((e) => e.id || e.dataset.axis + e.dataset.index + e.dataset.dir || e.className) };
+});
+const waitCoach = (page, re) => page.waitForFunction((src) => {
+  const w = document.getElementById("coach");
+  return !w.hidden && w.classList.contains("show") && !w.classList.contains("away") && new RegExp(src).test(w.querySelector(".coach-text").textContent);
+}, { timeout: 10000 }, re.source);
+const coachNext = async (page) => { await sleep(250); await page.tap("#coach .coach-next"); await sleep(150); };
+const arrowSel = (mv) => { const m = /^([RC])([1-6])([+-])$/.exec(mv); return `button.arrow[data-axis="${m[1] === "R" ? "row" : "col"}"][data-index="${Number(m[2]) - 1}"][data-dir="${m[3] === "+" ? 1 : -1}"]`; };
 
 /** Design-Check: bestehende Theme-Variablen sind weiter aktiv. */
 async function designCheck(page) {
@@ -94,7 +111,7 @@ async function desktop(browser) {
   await page.click("#start-howto"); await waitModal(page, /So geht/);
   const how = await page.$eval("#modal-body", (e) => e.textContent);
   ok(/Stein/.test(how) && /Brunnen/.test(how) && /Trieb/.test(how) && /Vorschau/.test(how), "„So geht's“ erklärt Modifikatoren + Vorschau");
-  await answer(page, null);
+  await answer(page, "ok");
 
   await page.click("#start-level"); await waitScreen(page, "game");
   await waitModal(page); ok(/Willkommen|Zielwort|Wortgarten/i.test(await modalTitle(page)), "Tutorial-Popup Level 1: " + (await modalTitle(page)));
@@ -228,11 +245,127 @@ async function iphone(browser) {
   await page.close();
 }
 
+/** Geführtes Tutorial auf dem iPhone 14: Coach-Marks, Sperre falscher Aktionen, Weiter, Überspringen, Wiederholen. */
+async function iphoneTutorial(browser) {
+  const device = puppeteer.KnownDevices["iPhone 14"];
+  console.log("iPhone 14 – Lehr-Level (frischer Spieler)");
+  const { page, errors } = await openPage(browser, device, null);
+  await waitScreen(page, "start");
+  ok((await page.$eval("#start-level-sub", (e) => e.textContent)).includes("Lehr-Level"), "Startseite: „Level 1 spielen“ startet das Lehr-Level");
+  ok(await page.$eval("#start-tutorial", (e) => e.hidden), "„Tutorial wiederholen“ erst nach dem ersten Durchlauf");
+  await page.tap("#start-level"); await waitScreen(page, "game");
+  await waitCoach(page, /Hinweis/);
+  let c = await coachInfo(page);
+  ok(c.on && c.inView && c.count === "1/7", `L1 Schritt 1 erklärt den Hinweis, Blase auf dem Bildschirm (${c.count})`);
+  ok(c.dimmed > 5, "Rest des Spiels leicht abgedunkelt");
+  ok(!(await page.evaluate(() => LetterSlideApp.modalOpen)), "kein altes Tipp-Popup");
+  ok(await page.$eval("#stat-combo", (e) => getComputedStyle(e).opacity === "0"), "Combo-Wolke im Level-Modus versteckt");
+  ok((await page.$$("#target-slots .slot.ghost")).length === 5, "Slots zeigen den Fortschritt WAERM zart (Geister-Buchstaben)");
+  await sleep(300);
+  await shotAs(page, "tutorial-l1-hint.png");
+  // falsche Aktion während eines Info-Schritts: Zug wird blockiert, Blase wackelt
+  await page.tap(arrowSel("R1-"));
+  await sleep(80);
+  ok(await page.$eval(".coach-bubble", (b) => b.classList.contains("coach-shake")), "falsche Aktion -> sanftes Wackeln");
+  ok((await page.evaluate(() => LetterSlideApp.game.moves)) === 0, "… und kein Zug");
+  await coachNext(page); await waitCoach(page, /Strich/);
+  ok((await coachInfo(page)).count === "2/7", "Weiter -> Schritt 2 (Slots)");
+  await coachNext(page); await waitCoach(page, /Pfeil am Rand/);
+  await coachNext(page); await waitCoach(page, /wischst/);
+  await coachNext(page); await waitCoach(page, /nach links/);
+  c = await coachInfo(page);
+  ok(c.pulse.includes("row0-1") && c.inView, "Zug-Schritt: Pfeil ← von Zeile 1 pulsiert");
+  ok(await page.$eval("#coach .coach-next", (b) => b.hidden), "Zug-Schritt hat keinen Weiter-Knopf");
+  await sleep(300);
+  await shotAs(page, "tutorial-l1-slide.png");
+  await page.tap(arrowSel("R3+")); await sleep(100);
+  ok((await page.evaluate(() => LetterSlideApp.game.moves)) === 0, "falscher Pfeil blockiert");
+  await page.tap("#btn-hint"); await sleep(150);
+  ok(!(await page.evaluate(() => LetterSlideApp.modalOpen)), "falscher Knopf (Hinweis) blockiert");
+  // richtige Aktion per Wischgeste
+  const t = await page.$eval('#board .tile[data-r="0"][data-c="3"]', (e) => { const r = e.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2, w: r.width }; });
+  await page.touchscreen.touchStart(t.x, t.y);
+  for (let k = 1; k <= 6; k++) await page.touchscreen.touchMove(t.x - (t.w * 0.9 * k) / 6, t.y);
+  await page.touchscreen.touchEnd();
+  await waitCoach(page, /Geschafft/);
+  ok((await page.evaluate(() => LetterSlideApp.game.solved && LetterSlideApp.game.moves)) === 1, "richtige Wischgeste löst Level 1 und führt weiter (Jubel)");
+  await coachNext(page); await waitCoach(page, /6 Buchstaben × 10/);
+  ok((await coachInfo(page)).count === "7/7", "Punkte werden kurz erklärt");
+  await coachNext(page);
+  await waitModal(page, /Level 1 gelöst!/);
+  ok(true, "danach Abschluss-Dialog „Level 1 gelöst!“");
+  ok(await page.evaluate(() => JSON.parse(localStorage.getItem("wortgartenStats.v1")).tutorial.done["1"] === true), "Lehr-Level 1 als erledigt gespeichert");
+  await answer(page, "next", true);
+
+  // Level 2: senkrechte Wörter, jeder Zug geführt
+  await waitCoach(page, /senkrecht/);
+  ok((await coachInfo(page)).inView, "L2: senkrechte Wörter erklärt");
+  await coachNext(page); await waitCoach(page, /Zeile 1 nach rechts/);
+  ok((await coachInfo(page)).pulse.includes("row01"), "L2: Pfeil → von Zeile 1 pulsiert");
+  await sleep(300);
+  await shotAs(page, "tutorial-l2-move.png");
+  await page.tap(arrowSel("R1+"));
+  await waitCoach(page, /zerbröseln/);
+  ok(/[A-Z]{3}/.test((await coachInfo(page)).text), "L2: kurze Wörter des Zugs werden genannt: " + (await coachInfo(page)).text.match(/\(([^)]*)\)/)?.[1]);
+  await coachNext(page); await waitCoach(page, /geschützt/);
+  ok((await page.$$("#board .tile.protected.coach-focus")).length >= 2, "L2: geschützte (lila) Kacheln hervorgehoben");
+  ok((await page.$$("#target-slots .slot.ghost")).length >= 2, "L2: Fortschritt als Geister-Buchstaben in den Slots");
+  // Überspringen
+  await sleep(250);
+  await page.tap("#coach .coach-skip"); await sleep(300);
+  ok(!(await coachInfo(page)).on, "Überspringen blendet den Coach aus");
+  ok(await page.evaluate(() => JSON.parse(localStorage.getItem("wortgartenStats.v1")).tutorial.skipped === true), "Überspringen gespeichert");
+  await page.tap(arrowSel("R6+")); await idle(page);
+  ok((await page.evaluate(() => LetterSlideApp.game.moves)) === 2, "nach dem Überspringen ist jeder Zug erlaubt");
+  await dismissTips(page, true);
+
+  // Wiederholen über die Startseite
+  await page.tap("#btn-menu"); await waitModal(page, /verlassen/); await answer(page, "ok", true);
+  await waitScreen(page, "start");
+  ok(!(await page.$eval("#start-tutorial", (e) => e.hidden)), "Startseite: „Tutorial wiederholen“ sichtbar");
+  await page.tap("#start-tutorial"); await waitScreen(page, "game");
+  await waitCoach(page, /Willkommen/);
+  ok((await page.evaluate(() => LetterSlideApp.game.level.id)) === 1 && (await coachInfo(page)).count === "1/7", "Tutorial startet wieder bei Level 1");
+  // … und über „So geht's“
+  await page.tap("#btn-howto"); await waitModal(page, /So geht/);
+  ok(!!(await page.$('#modal-actions button[data-value="tutorial"]')), "„So geht's“ bietet „Tutorial wiederholen“");
+  await answer(page, "ok", true);
+
+  // Level 4: erster Stein geführt
+  await page.evaluate(() => LetterSlideApp.startLevel(4));
+  await waitCoach(page, /Steine/);
+  await coachNext(page); await waitCoach(page, /Auge/);
+  ok((await coachInfo(page)).pulse.includes("btn-preview"), "L4: Vorschau-Auge hervorgehoben");
+  await coachNext(page); await waitCoach(page, /Spalte 1 nach unten/);
+  await page.tap(arrowSel("C1+"));
+  await waitCoach(page, /Zeile 2 nach links/);
+  await page.tap(arrowSel("R2-"));
+  await page.waitForSelector("#board .tile.preview", { timeout: 3000 }).then(() => ok(true, "L4: Vorschau blitzt beim geführten Zug"), () => ok(false, "L4: Vorschau blitzt beim geführten Zug"));
+  await waitCoach(page, /Ein Stein/);
+  c = await coachInfo(page);
+  ok((await page.$$("#board .tile.mod-stein.coach-focus")).length === 1 && c.inView, "L4: Coach-Karte zeigt auf den neuen Stein");
+  ok(!(await page.evaluate(() => LetterSlideApp.modalOpen)), "kein doppeltes „Ein Stein!“-Popup");
+  await sleep(300);
+  await shotAs(page, "tutorial-l4-stone.png");
+  await coachNext(page); await waitCoach(page, /Was passiert/);
+  await page.tap("#btn-undo"); await sleep(100);
+  ok((await page.evaluate(() => LetterSlideApp.game.moves)) === 2, "L4: Undo im Tutorial blockiert");
+  await page.tap("#btn-whatif"); await waitModal(page, /Was passiert/);
+  await answer(page, "ok", true);
+  await waitCoach(page, /Jetzt du/);
+  await coachNext(page);
+  ok(!(await coachInfo(page)).on, "L4: danach freies Spiel");
+  ok(await page.evaluate(() => JSON.parse(localStorage.getItem("wortgartenStats.v1")).tutorial.done["4"] === true), "L4 als geführt gespeichert");
+  ok(errors.length === 0, "keine JS-Fehler" + (errors.length ? ": " + errors.join(" | ") : ""));
+  await page.close();
+}
+
 (async () => {
   const browser = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ["--no-sandbox", "--autoplay-policy=user-gesture-required"] });
   try {
     await desktop(browser);
     await iphone(browser);
+    await iphoneTutorial(browser);
   } finally {
     await browser.close();
   }

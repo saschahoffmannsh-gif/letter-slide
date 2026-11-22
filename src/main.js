@@ -14,6 +14,8 @@
   const Input = root.LetterSlideInput;
   const Sound = root.LetterSlideAudio;
   const Particles = root.LetterSlideParticles;
+  const Tut = root.LetterSlideTutorial;
+  const Coach = root.LetterSlideCoach;
   const C = L.CONFIG;
 
   /** localStorage kann (Privatmodus, file:// in manchen Browsern) fehlen oder werfen. */
@@ -24,6 +26,7 @@
   let game = null;          // aktueller Spielzustand (null = noch nichts gestartet)
   let busy = false;         // true während Animationen -> Eingaben werden ignoriert
   let screen = "start";     // "start" | "game"
+  let session = null;       // laufendes Lehr-Level: { levelId, covers, game, ctx, finished, stepsDone }
   const SCREEN_MS = 320;
 
   const $ = (id) => document.getElementById(id);
@@ -34,7 +37,7 @@
   const startEl = {
     screen: $("start"), level: $("start-level"), levelTitle: $("start-level-title"), levelSub: $("start-level-sub"),
     daily: $("start-daily"), dailyTitle: $("start-daily-title"), dailySub: $("start-daily-sub"),
-    share: $("start-share"), free: $("start-free"), howto: $("start-howto")
+    share: $("start-share"), free: $("start-free"), howto: $("start-howto"), tutorial: $("start-tutorial")
   };
   const gameScreen = $("game");
   const wait = (ms) => new Promise((res) => setTimeout(res, ms));
@@ -94,7 +97,10 @@
     startEl.levelTitle.textContent = allDone ? "Alle Level gelöst" : `Level ${currentLevelId()} spielen`;
     startEl.levelSub.textContent = allDone
       ? `Gesamt ${total} Punkte · nochmal ab Level 1`
-      : solved ? `Gesamt ${total} Punkte · ${solved}/${n} gelöst` : `${n} Level · vom Tutorial bis zu Trieben`;
+      : solved ? `Gesamt ${total} Punkte · ${solved}/${n} gelöst`
+      : guidedFor(1) ? "Lehr-Level · Schritt für Schritt erklärt" : `${n} Level · vom Tutorial bis zu Trieben`;
+    // „Tutorial wiederholen“ erst zeigen, wenn es schon einmal lief oder übersprungen wurde
+    startEl.tutorial.hidden = !(stats.tutorial.skipped || Object.keys(stats.tutorial.done).length || stats.progress.unlocked > 1);
     const today = L.formatDateKey(new Date());
     const [y, m, d] = today.split("-");
     const res = Stats.dailyResult(stats, today);
@@ -130,7 +136,10 @@
   async function handleSlide(axis, index, dir) {
     if (!game || busy || game.ended || View.modalOpen || screen !== "game") return;
     if (!L.canSlide(game, axis, index)) return; // Linie nur aus Steinen
+    // Lehr-Level: nur der geforderte Zug ist erlaubt, alles andere wackelt sanft
+    if (!gate({ type: "slide", axis, index, dir }, document.querySelector(`button.arrow[data-axis="${axis}"][data-index="${index}"][data-dir="${dir}"]`))) return;
     busy = true;
+    Coach.busy(true);
     refreshControls();
     let result = null;
     try {
@@ -142,12 +151,12 @@
       const scoreBefore = game.score;
       const before = { cellMod: game.cellMod.slice(), sprout: game.sprout.slice() };
       result = L.performSlide(game, axis, index, dir);
-      View.updateHud(game, { score: scoreBefore, comboLevel: 0, mods: before, hideOverlay: true });
+      View.updateHud(game, { score: scoreBefore, comboLevel: 0, mods: before, grid: result.gridBefore, hideOverlay: true });
       await View.animateSlide(result.gridBefore, axis, index, dir, { cellMod: result.cellMod, sprout: result.sproutBefore });
       View.renderBoard(result.gridAfterSlide, { cellMod: result.cellMod, sprout: result.sproutAfterSlide });
       for (const step of result.steps) {
         Sound.word(Math.max(...step.matches.map((m) => m.length)), step.level);
-        View.updateHud(game, { score: scoreBefore, comboLevel: step.level, bump: step.level >= 2, mods: { cellMod: step.cellModBefore, sprout: step.sproutBefore }, hideOverlay: true });
+        View.updateHud(game, { score: scoreBefore, comboLevel: step.level, bump: step.level >= 2, mods: { cellMod: step.cellModBefore, sprout: step.sproutBefore }, grid: step.gridBefore, hideOverlay: true });
         await View.animateClear(step);
         await View.animateFall(step);
         await View.animatePlant(step);
@@ -158,8 +167,10 @@
       }
     } finally {
       busy = false;
+      Coach.busy(false);
       fullRender();
     }
+    if (Coach.active) Coach.satisfy({ type: "slide", axis, index, dir }, result);
     if (game.solved) return levelComplete();
     // Tutorial: erster Modifikator eines Typs
     for (const step of result.steps) for (const p of step.placed) await maybeTip(`first_${p.type}`);
@@ -168,6 +179,7 @@
 
   /** Spielstand/Level starten und zum Spiel wechseln. */
   function begin(state) {
+    stopTutorial();
     Particles.clear();
     game = state;
     View.selection = null;
@@ -189,6 +201,7 @@
   async function maybeTip(key) {
     const tip = TIPS[key];
     if (!tip || !game || game.modeId !== "level" || stats.tips[key]) return;
+    if (Coach.active || (session && session.game === game)) return; // im Lehr-Level erklärt der Coach
     if (tip.any ? game.level.id < tip.minLevel : tip.type ? game.level.id < tip.level || !game.enabled[tip.type] : game.level.id !== tip.level) return;
     stats.tips[key] = true;
     save();
@@ -197,11 +210,93 @@
   }
   async function levelIntro() {
     if (!game || game.modeId !== "level") return;
+    if (guidedFor(game.level.id)) return runTutorial(game.level.id);
     await maybeTip(`intro${game.level.id}`);
+  }
+
+  /* ------------------------------------------------------------------ Lehr-Level (geführtes Tutorial) */
+
+  /** Wird dieses Level geführt? (Skript vorhanden, Tutorial nicht übersprungen, Level noch nicht geführt gespielt) */
+  const guidedFor = (id) => !!Tut.scriptFor(id) && !stats.tutorial.skipped && !stats.tutorial.done[id];
+
+  /** Aktion erlaubt? Sonst sanftes Wackeln (Blase + Element). Ohne laufendes Tutorial immer erlaubt. */
+  function gate(action, el) {
+    if (!Coach.active || Coach.allow(action)) return true;
+    Coach.reject(el);
+    return false;
+  }
+
+  /** Lehr-Level-Schritte nacheinander zeigen. Ende: durchlaufen, übersprungen oder abgebrochen. */
+  function runTutorial(id) {
+    const script = Tut.scriptFor(id);
+    const g = game;
+    const ctx = { game: g, lastResult: null, index: 0, total: script.steps.length + (script.afterSolve || []).length };
+    const me = { levelId: id, covers: script.covers, game: g, ctx, stepsDone: false };
+    session = me;
+    me.finished = (async () => {
+      let res = "next";
+      for (let k = 0; k < script.steps.length && res === "next"; k++) {
+        ctx.index = k;
+        res = await Coach.show(script.steps[k], ctx);
+      }
+      if (session !== me) return;
+      if (res === "skip") return skipTutorial();
+      if (res !== "next") { session = null; return; }
+      // durchlaufen: Level als geführt gespielt merken, ersetzte Tipp-Popups gelten als gesehen
+      me.stepsDone = true;
+      stats.tutorial.done[id] = true;
+      for (const k of script.covers) stats.tips[k] = true;
+      save();
+    })();
+    return me.finished;
+  }
+
+  /** Nach dem Lösen eines Lehr-Levels: Abschluss-Schritte (Jubel, Punkte) vor dem Dialog. */
+  async function tutorialAfterSolve() {
+    const me = session;
+    if (!me || me.game !== game) return;
+    await me.finished;
+    const after = (Tut.scriptFor(me.levelId).afterSolve || []);
+    if (session === me && me.stepsDone) {
+      for (let k = 0; k < after.length; k++) {
+        me.ctx.index = Tut.scriptFor(me.levelId).steps.length + k;
+        const r = await Coach.show(after[k], me.ctx);
+        if (r === "skip") { skipTutorial(); break; }
+        if (r !== "next") break;
+      }
+    }
+    if (session === me) session = null;
+  }
+
+  /** „Überspringen“: ganzes Tutorial aus (Tipp-Popups übernehmen wieder als Kurzhilfe). */
+  function skipTutorial() {
+    stats.tutorial.skipped = true;
+    save();
+    session = null;
+    refreshControls();
+  }
+
+  /** Laufendes Lehr-Level beenden (Menü, anderes Level). */
+  function stopTutorial() {
+    session = null;
+    if (Coach.active) Coach.abort();
+  }
+
+  /** „Tutorial wiederholen“: Tutorial zurücksetzen und Level 1 geführt starten. */
+  async function replayTutorial() {
+    if (busy) return;
+    if (View.modalOpen) View.closeModal("cancel");
+    if (screen === "game" && !(await confirmLeave())) return;
+    stopTutorial();
+    stats.tutorial = { done: {}, skipped: false };
+    for (const id of Tut.levelIds()) for (const k of Tut.scriptFor(id).covers) delete stats.tips[k];
+    save();
+    return startLevel(1);
   }
 
   /** Level gelöst: speichern, Dialog „Level X gelöst! Y Punkte. Züge: N.“ mit „Nächstes Level“. */
   async function levelComplete() {
+    await tutorialAfterSolve();
     const sol = game.solved;
     const text = L.buildShareText(game);
     let newBest = false;
@@ -234,6 +329,7 @@
   function nextLevel() {
     const next = L.nextLevel(game);
     if (!next) return goToMenu();
+    stopTutorial();
     next.baseScore = Stats.totalScore(stats, next.level.id);
     next.score = next.baseScore;
     Particles.clear();
@@ -291,6 +387,7 @@
   async function goToMenu() {
     if (busy || View.modalOpen) return;
     if (!(await confirmLeave())) return;
+    stopTutorial();
     Particles.clear();
     renderStart();
     await showScreen("start");
@@ -344,8 +441,8 @@
           <li><b>Vorschau:</b> Felder, die beim nächsten Zug zu Modifikatoren würden, blitzen vorher gelb auf. „Was passiert?“ listet alle solchen Züge.</li>
           <li><b>Punkte:</b> Länge × ${C.POINTS_PER_LETTER} × Brunnen × Kaskade. ${C.HINTS_PER_LEVEL} Hinweise pro Level, je −${pct} %.</li>
         </ul>`,
-      actions: [{ label: "Los geht's", value: "ok", cls: "pill-mint" }]
-    });
+      actions: [{ label: "Tutorial wiederholen", value: "tutorial", cls: "pill-cream", icon: "i-bulb" }, { label: "Los geht's", value: "ok", cls: "pill-mint" }]
+    }).then((v) => { if (v === "tutorial") replayTutorial(); });
   }
 
   function linkManifest() {
@@ -364,17 +461,25 @@
   Sound.installUnlock(document);
   Particles.init();
   View.init(handleSlide, () => {});
+  Coach.init();
+  View.onRender = () => Coach.refresh();
+  /** Knopf-Aktion mit Tutorial-Prüfung; bei einem tap-Schritt gilt er nach der Aktion als erledigt. */
+  const tapped = (what, fn) => async () => {
+    if (!gate({ type: "tap", what }, btn[what])) return;
+    await fn();
+    if (Coach.active) Coach.satisfy({ type: "tap", what });
+  };
   Input.bind({
     onSlide: handleSlide,
-    onUndo: () => {
+    onUndo: tapped("undo", () => {
       if (!game || busy || View.modalOpen || screen !== "game") return;
       if (L.undo(game)) { Particles.clear(); fullRender(); }
-    },
-    onReset: () => { if (!game || busy || View.modalOpen) return; Particles.clear(); L.reset(game); fullRender(); View.introBoard(); },
-    onShare: () => { if (game && !busy && !View.modalOpen) shareText(L.buildShareText(game)); },
-    onHint: showHint,
-    onWhatIf: showWhatIf,
-    onTogglePreview: togglePreview,
+    }),
+    onReset: tapped("reset", () => { if (!game || busy || View.modalOpen) return; Particles.clear(); L.reset(game); fullRender(); View.introBoard(); }),
+    onShare: tapped("share", () => { if (game && !busy && !View.modalOpen) return shareText(L.buildShareText(game)); }),
+    onHint: tapped("hint", showHint),
+    onWhatIf: tapped("whatif", showWhatIf),
+    onTogglePreview: tapped("preview", togglePreview),
     onToggleMute: toggleMute,
     onSelect: (r, c) => { if (!game) return; View.selection = { r, c }; View.renderBoard(game.grid, game); },
     isBusy: () => busy || View.modalOpen || screen !== "game" || !game
@@ -388,6 +493,7 @@
   startEl.daily.addEventListener("click", () => { if (!View.modalOpen) startDaily(); });
   startEl.free.addEventListener("click", () => { if (!View.modalOpen) startFree(); });
   startEl.howto.addEventListener("click", showHowTo);
+  startEl.tutorial.addEventListener("click", () => { if (!View.modalOpen) replayTutorial(); });
   startEl.share.addEventListener("click", () => {
     const res = Stats.dailyResult(stats, L.formatDateKey(new Date()));
     if (res && !View.modalOpen) shareText(res.shareText);
@@ -405,6 +511,8 @@
     get screen() { return screen; },
     get modalOpen() { return View.modalOpen; },
     get stats() { return stats; },
-    handleSlide, startLevel, startDaily, startFree, goToMenu, nextLevel, showHint, showWhatIf
+    get session() { return session; },
+    Coach,
+    handleSlide, startLevel, startDaily, startFree, goToMenu, nextLevel, showHint, showWhatIf, replayTutorial
   };
 })(typeof globalThis !== "undefined" ? globalThis : this);

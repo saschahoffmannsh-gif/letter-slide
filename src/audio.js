@@ -74,6 +74,8 @@
     },
 
     click() { this.tone(1400, 0.035, "square", 0.05); },
+    /** Tutorial: falsche Aktion – leiser, weicher Ton. */
+    nope() { this.tone(240, 0.09, "sine", 0.035); },
     /** Modifikator gepflanzt: Stein dumpf, Brunnen „blubb“, Trieb hell. */
     plant(type) {
       if (type === "stein") { this.tone(180, 0.12, "triangle", 0.16); this.tone(120, 0.1, "sine", 0.1, 0.03); }

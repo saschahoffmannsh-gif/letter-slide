@@ -49,7 +49,7 @@
         counts: { stein: $("count-stein"), brunnen: $("count-brunnen"), trieb: $("count-trieb") },
         chips: document.querySelectorAll("#modstatus .mod-chip"),
         board: $("board"), mode: $("stat-mode"), moves: $("stat-moves"), score: $("stat-score"),
-        combo: $("stat-combo"), comboValue: $("stat-combo-value"), flash: $("word-flash"),
+        combo: $("stat-combo"), hud: $("hud"), comboValue: $("stat-combo-value"), flash: $("word-flash"),
         comboPop: $("combo-pop"), overlay: $("ended-overlay"), endedSummary: $("ended-summary"),
         modeButtons: $("mode-buttons"),
         modal: $("modal"), modalTitle: $("modal-title"), modalBody: $("modal-body"), modalActions: $("modal-actions")
@@ -136,6 +136,7 @@
         }
       }
       this.applySelection(tiles);
+      if (this.onRender) this.onRender(tiles); // z. B. Tutorial-Coach: Abdunkeln/Puls neu anwenden
       return tiles;
     },
 
@@ -333,11 +334,16 @@
       this.el.comboValue.textContent = `×${formatMult(comboMultiplier(Math.max(level, 1)))}`;
       const c = this.el.combo;
       c.dataset.level = String(Math.min(level, 5));
+      // Mit Zielwort (Level/Tagesrätsel) ist die Combo-Wolke versteckt und erscheint nur kurz
+      // während einer echten Kaskade (Stufe >= 2). Im Freien Spiel bleibt sie wie gehabt sichtbar.
+      const quiet = !!state.target;
+      this.el.hud.classList.toggle("combo-quiet", quiet);
+      c.classList.toggle("live", quiet && (override.comboLevel ?? 0) >= 2);
       if (override.bump) {
         c.classList.add("bump");
         setTimeout(() => c.classList.remove("bump"), 160);
       }
-      this.renderTarget(state);
+      this.renderTarget(state, override);
       // Modifikator-Leiste: „Stein: 2 | Brunnen: 1 | Trieb: 0“; im Level deaktivierte Typen blass
       const counts = L.countModifiers(override.mods || state);
       for (const t of L.MOD_TYPES) this.el.counts[t].textContent = counts[t];
@@ -355,7 +361,7 @@
     },
 
     /** Zielwort-Feld: „Etwas Warmes · 6 Buchstaben“ + Platzhalter „_ _ _ _ _ _“ (Hinweise decken auf). */
-    renderTarget(state) {
+    renderTarget(state, override = {}) {
       const { targetCard, targetHint, slots, hintLine } = this.el;
       targetCard.classList.toggle("free", !state.target);
       if (!state.target) {
@@ -368,14 +374,18 @@
       const hint = state.hint.charAt(0).toUpperCase() + state.hint.slice(1);
       targetHint.textContent = `${hint} · ${t.length} Buchstaben`;
       slots.textContent = "";
+      // Live-Fortschritt: Buchstaben der aktuell richtigen Teilfolge (= geschützte Felder) zart als
+      // „Geist“; Hinweis-Buchstaben bleiben kräftig. Das ist der eigene Fortschritt, kein Spoiler.
+      const run = state.solved ? null : L.bestPartialRun(override.grid || state.grid, t);
       for (let k = 0; k < t.length; k++) {
         const el = document.createElement("span");
         const shown = state.solved || state.revealed.includes(k);
-        el.className = "slot" + (state.solved ? " solved" : shown ? " revealed" : " empty");
-        el.textContent = shown ? t[k] : "_";
+        const ghost = !shown && run && k >= run.from && k < run.from + run.length;
+        el.className = "slot" + (state.solved ? " solved" : shown ? " revealed" : ghost ? " ghost" : " empty");
+        el.textContent = shown || ghost ? t[k] : "_";
         slots.appendChild(el);
       }
-      slots.setAttribute("aria-label", `Zielwort: ${[...t].map((ch, k) => (state.solved || state.revealed.includes(k) ? ch : "_")).join(" ")} (${t.length} Buchstaben)`);
+      slots.setAttribute("aria-label", `Zielwort: ${[...slots.children].map((e) => e.textContent).join(" ")} (${t.length} Buchstaben)`);
       const last = state.hints[state.hints.length - 1];
       hintLine.hidden = !last;
       if (last) hintLine.textContent = `Hinweis ${state.hints.length}/${L.CONFIG.HINTS_PER_LEVEL}: ${last.text}`;
