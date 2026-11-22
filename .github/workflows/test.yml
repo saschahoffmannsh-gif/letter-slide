@@ -1,0 +1,18 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Syntax-Check (alle Scripts)
+        run: for f in src/*.js tests/*.js; do node --check "$f"; done
+      - name: Logik-Tests
+        run: npm test
