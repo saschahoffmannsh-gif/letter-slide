@@ -12,7 +12,7 @@ const puppeteer = require(process.env.PUPPETEER_CORE || "puppeteer-core");
   const page = await browser.newPage();
   await page.emulate(puppeteer.KnownDevices["iPhone 14"]);
   await page.goto("file://" + path.resolve(__dirname, "..", "index.html"));
-  await page.evaluate(() => LetterSlideApp.startFree());
+  await page.evaluate(() => LetterSlideApp.startGame("endless"));
   await new Promise((r) => setTimeout(r, 1500));
   const cdp = await page.target().createCDPSession();
   await cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 });

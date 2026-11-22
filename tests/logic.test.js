@@ -1,382 +1,251 @@
-// Tests für src/logic.js (Wortgarten) – reine Logik, keine Abhängigkeiten.
+// Logik-Tests (keine Abhängigkeiten): `npm test` bzw. `node --test tests/logic.test.js`
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const L = require("../src/logic.js");
+const C = require("../src/config.js");
 
-const { idx } = L;
-/** Grid aus 6 Zeilen-Strings; "." = Füllbuchstabe Q (bildet keine Wörter). */
-const G = (...rows) => rows.join("").replace(/\./g, "Q").split("");
-/** Test-Level aus Zeilen und Zielwort. */
-const lvl = (rows, target = "ZZZZ", id = 99) =>
-  ({ id, hint: "Test", length: target.length, target, grid: rows.map((r) => r.replace(/\./g, "Q").split("")) });
-const json = (x) => JSON.parse(JSON.stringify(x));
+const N = L.GRID_SIZE;
+const at = (g, r, c) => g[r * N + c];
+const toGrid = (rows) => rows.join("").split("");
+/** Füllbrett ohne Vokale -> bildet garantiert keine Wörter. */
+const filler = () => toGrid(["QXJQXJ", "XJQXJQ", "JQXJQX", "QXJQXJ", "XJQXJQ", "JQXJQX"]);
+const plantRow = (g, r, c0, word) => word.split("").forEach((ch, k) => (g[r * N + c0 + k] = ch));
+const plantCol = (g, c, r0, word) => word.split("").forEach((ch, k) => (g[(r0 + k) * N + c] = ch));
+const snap = (st) => JSON.stringify(L.takeSnapshot(st));
 
-test.describe("Wortliste & Grundlagen", () => {
-  test("Wortliste: keine Duplikate, nur A–Z, Länge 3–6", () => {
-    assert.equal(new Set(L.WORD_LIST).size, L.WORD_LIST.length);
-    assert.ok(L.WORD_LIST.every((w) => /^[A-Z]{3,6}$/.test(w)));
-    assert.ok(L.WORD_LIST.length >= 600);
+test.describe("Wortliste", () => {
+  test("keine Duplikate, nur A–Z, Länge 3–6, 600–1000 Wörter", () => {
+    const raw = C.WORD_LIST_RAW.split("\n").filter((l) => !l.trim().startsWith("//")).join(" ").trim().split(/\s+/);
+    assert.equal(new Set(raw).size, raw.length, "Duplikate im Rohtext");
+    for (const w of raw) assert.match(w, /^[A-Z]{3,6}$/);
+    assert.equal(L.WORD_LIST.length, raw.length);
+    assert.ok(raw.length >= 600 && raw.length <= 1000, `Anzahl ${raw.length}`);
+    assert.ok(L.DICTIONARY instanceof Set);
   });
-  test("PRNG ist deterministisch, Zustand ist eine Zahl", () => {
-    const a = L.createRng(42), b = L.createRng(42);
-    const xs = Array.from({ length: 5 }, () => L.rngNext(a));
-    assert.deepEqual(xs, Array.from({ length: 5 }, () => L.rngNext(b)));
-    assert.equal(typeof a.state, "number");
-  });
-  test("slideLine ist zyklisch in alle 4 Richtungen", () => {
-    const g = G("ABCDEF", "......", "......", "......", "......", "......");
-    assert.equal(L.slideLine(g, "row", 0, 1).slice(0, 6).join(""), "FABCDE");
-    assert.equal(L.slideLine(g, "row", 0, -1).slice(0, 6).join(""), "BCDEFA");
-    const v = G("A.....", "B.....", "C.....", "D.....", "E.....", "F.....");
-    const col = (x) => [0, 1, 2, 3, 4, 5].map((r) => x[idx(r, 0)]).join("");
-    assert.equal(col(L.slideLine(v, "col", 0, 1)), "FABCDE");
-    assert.equal(col(L.slideLine(v, "col", 0, -1)), "BCDEFA");
-  });
-  test("findWords: HAUS zählt nicht zusätzlich AUS; senkrecht wird gefunden", () => {
-    assert.deepEqual(L.findWords(G("HAUS..", "......", "......", "......", "......", "......")).map((m) => m.word), ["HAUS"]);
-    const v = L.findWords(G("T.....", "O.....", "R.....", "......", "......", "......"));
-    assert.equal(v.length, 1);
-    assert.equal(v[0].axis, "col");
+  test("parseWordList bereinigt Eingaben", () => {
+    assert.deepEqual(L.parseWordList("// Kommentar\nhaus Haus AB  STRASSEN BÄR auto\n"), ["HAUS", "AUTO"]);
   });
 });
 
-test.describe("Zielwort", () => {
-  test("checkTargetWord: waagerecht, senkrecht, nicht Teil eines längeren Worts", () => {
-    assert.ok(L.checkTargetWord(G("..MOND", "......", "......", "......", "......", "......"), "MOND"));
-    assert.ok(L.checkTargetWord(G("M.....", "O.....", "N.....", "D.....", "......", "......"), "MOND"));
-    assert.equal(L.checkTargetWord(G("HAUS..", "......", "......", "......", "......", "......"), "AUS"), null);
-    assert.equal(L.checkTargetWord(G("DNOM..", "......", "......", "......", "......", "......"), "MOND"), null, "nicht rückwärts");
+test.describe("Modi / Seeds", () => {
+  test("gleiches Datum -> identisches Startbrett", () => {
+    const a = L.startDaily(new Date(2026, 10, 22, 8)), b = L.startDaily(new Date(2026, 10, 22, 23, 59));
+    assert.deepEqual(a.grid, b.grid);
+    assert.equal(a.seed, L.hashString("2026-11-22"));
+    assert.equal(a.puzzleNumber, 326);
+    assert.equal(L.dailyPuzzleNumber("2026-01-01"), 1);
   });
-  test("Zielwort wird nicht als kurzes Wort gelöscht, sondern löst das Level", () => {
-    const st = L.loadLevel(lvl(["ORQ..T", "......", "......", "......", "......", "......"], "TOR"));
-    const res = L.performSlide(st, "row", 0, 1);
-    assert.equal(res.steps.length, 0);
-    assert.ok(st.solved && st.ended);
-    assert.equal(st.levelPoints, 30);
-    assert.equal(L.performSlide(st, "row", 1, 1), null, "nach dem Lösen keine Züge mehr");
-    assert.equal(L.undo(st), false);
+  test("anderes Datum -> anderes Brett", () => {
+    assert.notDeepEqual(L.startDaily(new Date(2026, 10, 22)).grid, L.startDaily(new Date(2026, 10, 23)).grid);
   });
-  test("Punkte: Länge × 10 × Kaskade × Hinweis-Abzug", () => {
-    assert.equal(L.targetScore(6), 60);
-    assert.equal(L.targetScore(5, 1), 75);
-    assert.equal(L.targetScore(5, 0, 1), 40);
-    assert.equal(L.targetScore(5, 0, 5), 0);
+  test("Endlos unterscheidet sich, fester Seed ist reproduzierbar", () => {
+    const d = L.startDaily(new Date(2026, 10, 22));
+    const e1 = L.startEndless(), e2 = L.startEndless();
+    assert.notDeepEqual(e1.grid, d.grid);
+    assert.notDeepEqual(e1.grid, e2.grid);
+    assert.deepEqual(L.startEndless(1234).grid, L.startEndless(1234).grid);
   });
-  test("Zielwort durch Kaskade: Multiplikator ×1,5 (ungeschützte Buchstaben fallen nach)", () => {
-    // TOR in Zeile 6 zerbröselt; A/U/S darüber (kein Zielbuchstabe) fallen auf SEE -> nicht das Szenario.
-    // Stattdessen: ungeschützte Füllbuchstaben über einem Loch, Zielwort entsteht durch Nachrutschen
-    // von Buchstaben, die NICHT gebraucht werden? Besser: Zielwort entsteht durch den Slide selbst
-    // nach einer Löschrunde aus einem anderen Wort, dessen Buchstaben nicht zum Ziel gehören.
-    // Zeile 6 hat TOR (wird gelöscht). Spalte 2 hat Q,Q,Q,Q,E,R und nach Fallen...?
-    // Einfacher nachweisbarer Fall: kurzes Wort und Zielwort in getrennten Linien, nach
-    // Löschen entsteht das Zielwort durch Nachfüllen nicht – wir prüfen eine konstruierte Kaskade
-    // über cascade() direkt, indem ein kurzes Wort wegfällt und ein bereits fertiges Ziel
-    // danach sichtbar wird? Das Ziel wird VOR dem Löschen geprüft.
-    // Konstruktion: MOND steht noch nicht; M,O,N sind nicht verankert in einer Weise, die das
-    // Zusammentreffen verhindert. D liegt in Spalte 1 unten, M/O/N sind in Spalte 2 (nicht needed?
-    // Sie SIND needed und fallen nicht). Also kann das klassische „Buchstaben fallen auf D“
-    // mit benötigten Buchstaben nicht mehr passieren.
-    // Kaskaden-Punkte prüfen wir mit einem Zielwort, das nach dem Löschen eines unbeteiligten
-    // kurzen Worts schon dasteht? Nein, Prüfung ist vorher.
-    // Alternative: das Zielwort entsteht durch Nachfüllen (PRNG) nach einem Löschen – zu unstabil.
-    // Wir prüfen comboMultiplier und lösen ein Level, in dem nach einem Slide zuerst ein
-    // kurzes Wort zerbröselt und danach (ohne Fallen der Zielbuchstaben) das Zielwort dasteht,
-    // z. B. weil das kurze Wort nur neben dem bereits fast fertigen Wort lag und nichts
-    // am Ziel verändert.
-    const rows = ["MOND..", "......", "......", "......", "......", "TOR..."];
-    // MOND steht schon im Startgrid – validateLevel würde das ablehnen, loadLevel tut das nicht.
-    // Stattdessen: nach einem Slide entsteht TOR, zerbröselt, und MOND lag schon nach dem Slide.
-    const st = L.loadLevel(lvl(["MNDQO.", "......", "......", "......", "......", "RTO..."], "MOND"));
-    // Zeile 1 nach links: O von rechts? MNDQO. nach links = NDQO.M – nicht MOND.
-    // Zeile 1 nach rechts: .MNDQO – nicht. Spalte...
-    // Einfacher: Zeile 6 nach links: RTO... -> TO...R = TOR, zerbröselt. Zeile 1 ist schon MOND? 
-    // Load "MONDQ.", but then target is already there at start and first cascade check in
-    // performSlide happens AFTER the slide. If we slide a different row, MOND stays and is found
-    // BEFORE short words – cascades = 0.
-    // To get cascades=1, target must appear only after a clear/refill/gravity step.
-    // With needed letters not falling, this happens if refill or unneeded letters form the word,
-    // OR if a short word's non-needed letters disappearing reveals a line? Clearing doesn't
-    // move needed letters into a line.
-    // Refill can complete a word. That's PRNG-dependent.
-    // We'll just assert the formula and a cascade count via a refill-friendly seed if needed.
-    // Practical test: after TOR (fully unneeded) clears in a line crossing nothing of MOND,
-    // if MOND is formed only after gravity of UNNEEDED letters... If all M,O,N,D are needed
-    // they don't move. So MOND must already be aligned after the slide, which is checked first.
-    // Conclusion: with the new rule, cascade-completed targets only happen via refill letters
-    // or via unneeded extra copies sliding into place during gravity.
-    // Extra copies: target MOND, we have needed M,O,N,D elsewhere, plus extra M,O,N above a D.
-    const rows2 = [
-      "M.....", // extra M (needed picks first M in reading order = this one)
-      "O.....",
-      "N.....",
-      "TOR...",
-      "D.....", // this D is needed (only D)
-      "......"
-    ];
-    // needed: M(0,0), O(1,0), N(2,0), D(4,0). TOR at (3,0-2): T,O,R – the O at (3,1) is extra.
-    // Cascade: TOR clears (T, extra O, R). Gravity: needed M,O,N,D stay. Hole at (3,0) remains
-    // between N and D. MOND is NOT formed. Good illustration, but not a score test.
-    // Use a case where an UNNEEDED extra set spells the word after gravity... wait, if they
-    // spell MOND after gravity they would already be a target before? Not if TOR is in between.
-    // After TOR (middle of a second MON? no).
-    // I'll test combo via targetScore and a performSlide that we know cascades from existing levels
-    // or skip the "forms after cascade" scenario in favor of checking st.solved.cascades on L12
-    // which we know has cascades: 1 (90 points). That's an integration test in levels.test.
-    assert.equal(L.comboMultiplier(1), 1);
-    assert.equal(L.comboMultiplier(2), 1.5);
-    assert.equal(L.targetScore(6, 1), 90);
+  test("Startbrett: 36 Großbuchstaben, keine Wörter", () => {
+    for (let s = 0; s < 200; s++) {
+      const g = L.startEndless(s).grid;
+      assert.equal(g.length, 36);
+      assert.ok(g.every((x) => /^[A-Z]$/.test(x)));
+      assert.equal(L.findWords(g).length, 0);
+    }
+  });
+  test("unbekannter Modus wirft Fehler", () => {
+    assert.throws(() => L.startMode("gibtsnicht"));
   });
 });
 
-test.describe("Benötigte Zielbuchstaben sind geschützt", () => {
-  test("bestPartialRun: längste richtige Teilfolge (>= 2), Präfix bevorzugt", () => {
-    const g = G("MO....", "......", "...ND.", "......", "......", "......");
-    const run = L.bestPartialRun(g, "MOND");
-    assert.deepEqual(run.cells, [idx(0, 0), idx(0, 1)]);
-    assert.equal(run.from, 0);
-    assert.equal(L.bestPartialRun(G("M.....", "......", "......", "......", "......", "......"), "MOND"), null, "1 Buchstabe ist kein Run");
-  });
+test("slideLine ist zyklisch in alle 4 Richtungen", () => {
+  const g = Array.from({ length: 36 }, (_, i) => "c" + i); // eindeutige Marker
+  const right = L.slideLine(g, "row", 2, +1);
+  assert.equal(at(right, 2, 0), at(g, 2, 5)); assert.equal(at(right, 2, 1), at(g, 2, 0));
+  const left = L.slideLine(g, "row", 2, -1);
+  assert.equal(at(left, 2, 5), at(g, 2, 0)); assert.equal(at(left, 2, 0), at(g, 2, 1));
+  const down = L.slideLine(g, "col", 4, +1);
+  assert.equal(at(down, 0, 4), at(g, 5, 4)); assert.equal(at(down, 1, 4), at(g, 0, 4));
+  const up = L.slideLine(g, "col", 4, -1);
+  assert.equal(at(up, 5, 4), at(g, 0, 4)); assert.equal(at(up, 0, 4), at(g, 1, 4));
+  for (let c = 0; c < N; c++) assert.equal(at(right, 3, c), at(g, 3, c)); // andere Linien unverändert
+  for (let r = 0; r < N; r++) assert.equal(at(down, r, 3), at(g, r, 3));
+  assert.equal(g[0], "c0"); // Original unverändert
+  assert.deepEqual(L.slideLine(right, "row", 2, -1), g);
+  assert.deepEqual(L.slideLine(up, "col", 4, +1), g);
+  let x = g; for (let k = 0; k < 6; k++) x = L.slideLine(x, "col", 1, +1);
+  assert.deepEqual(x, g);
+});
 
-  test("neededCells: je Zielbuchstabe die benötigte Anzahl, zuerst die Teilfolge, dann Leserichtung", () => {
-    const g = G("MO....", "......", "...ND.", "......", "......", "......");
-    const need = L.neededCells(g, "MOND");
-    assert.deepEqual([...need].sort((a, b) => a - b), [idx(0, 0), idx(0, 1), idx(2, 3), idx(2, 4)]);
-    assert.deepEqual([...L.protectedCells(g, "MOND")].sort((a, b) => a - b), [...need].sort((a, b) => a - b), "Alias");
-    assert.equal(L.neededCells(g, null).size, 0);
-    // Einzelner Buchstabe ist trotzdem needed
-    const one = L.neededCells(G("M.....", "......", "......", "......", "......", "......"), "MOND");
-    assert.equal(one.size, 1);
-    assert.ok(one.has(idx(0, 0)));
+test.describe("findWords", () => {
+  test("findet waagerechtes Wort", () => {
+    const g = filler(); plantRow(g, 1, 1, "HAUS");
+    const m = L.findWords(g);
+    assert.equal(m.length, 1); assert.equal(m[0].word, "HAUS"); assert.equal(m[0].axis, "row");
+    assert.deepEqual(m[0].cells, [7, 8, 9, 10]);
   });
-
-  test("Doppelbuchstaben: nur so viele Kacheln wie das Wort braucht (KAFFEE, WASSER)", () => {
-    const g = G("KAFFEE", "EFEFEE", "......", "......", "......", "......");
-    const need = L.neededCells(g, "KAFFEE");
-    const letters = [...need].map((i) => g[i]).sort().join("");
-    assert.equal(letters, "AEEFFK");
-    assert.equal(need.size, 6);
-    // die überzähligen E/F in Zeile 2 sind nicht geschützt
-    for (let c = 0; c < 6; c++) assert.ok(!need.has(idx(1, c)), "Zeile 2 ungeschützt");
-    const w = G("WASSER", "SSSSSS", "......", "......", "......", "......");
-    const ns = [...L.neededCells(w, "WASSER")].map((i) => w[i]).sort().join("");
-    assert.equal(ns, "AERSSW");
+  test("findet senkrechtes Wort", () => {
+    const g = filler(); plantCol(g, 3, 2, "BAUM");
+    const m = L.findWords(g);
+    assert.equal(m.length, 1); assert.equal(m[0].word, "BAUM"); assert.equal(m[0].axis, "col");
+    assert.deepEqual(m[0].cells, [15, 21, 27, 33]);
   });
-
-  test("kurzes Wort durch einen benötigten Buchstaben: nur die anderen Kacheln zerbröseln", () => {
-    // MO in Zeile 1 (Run + needed); Zeile 3 nach rechts -> senkrecht OHR durch das O
-    const rows = ["MO....", ".H....", "R.....", "......", "......", "......"];
-    const st = L.loadLevel(lvl(rows, "MOND"));
-    const r = L.performSlide(st, "row", 2, 1);
-    assert.ok(r.steps.length >= 1, "OHR zerbröselt teilweise");
-    assert.deepEqual(r.steps[0].matches.map((m) => m.word), ["OHR"]);
-    assert.equal(st.grid[idx(0, 0)], "M", "M bleibt");
-    assert.equal(st.grid[idx(0, 1)], "O", "O bleibt");
-    assert.ok(!r.steps[0].cleared.includes(idx(0, 0)) && !r.steps[0].cleared.includes(idx(0, 1)));
-    assert.ok(r.steps[0].cleared.includes(idx(1, 1)) && r.steps[0].cleared.includes(idx(2, 1)));
-    // Gegenprobe ohne Zielwort: das ganze OHR verschwindet
-    const free = L.loadLevel(lvl(rows, "ZZZZ"));
-    const r2 = L.performSlide(free, "row", 2, 1);
-    assert.ok(r2.steps[0].cleared.includes(idx(0, 1)));
+  test("HAUS zählt nicht zusätzlich AUS", () => {
+    assert.ok(L.DICTIONARY.has("AUS") && L.DICTIONARY.has("HAUS"));
+    const g = filler(); plantRow(g, 0, 0, "HAUS");
+    assert.deepEqual(L.findWords(g).map((m) => m.word), ["HAUS"]);
   });
-
-  test("einzelner benötigter Buchstabe (noch kein Run) zerbröselt ebenfalls nicht", () => {
-    // R M Q Q Q A – nach rechts: A R M Q Q Q, darin ARM. M ist der einzige Zielbuchstabe.
-    const st = L.loadLevel(lvl(["RMQ..A", "......", "......", "......", "......", "......"], "MOND"));
-    assert.ok(L.neededCells(st.grid, "MOND").has(idx(0, 1)), "M ist needed");
-    const r = L.performSlide(st, "row", 0, 1);
-    assert.ok(r.steps.length >= 1);
-    assert.equal(r.steps[0].matches[0].word, "ARM");
-    assert.equal(st.grid[idx(0, 2)], "M", "M bleibt nach dem Zerbröseln");
-    assert.ok(!r.steps[0].cleared.includes(idx(0, 2)));
-    assert.ok(r.steps[0].cleared.includes(idx(0, 0)) && r.steps[0].cleared.includes(idx(0, 1)));
+  test("Kreuzung Zeile/Spalte: beide Treffer, geteilte Zelle einmal gelöscht", () => {
+    const g = filler(); plantRow(g, 0, 0, "HAUS"); plantCol(g, 0, 0, "HUND");
+    const m = L.findWords(g);
+    assert.deepEqual(m.map((x) => x.word).sort(), ["HAUS", "HUND"]);
+    const { cleared } = L.clearWords(g, m);
+    assert.deepEqual(cleared, [0, 1, 2, 3, 6, 12, 18]);
   });
-
-  test("kurzes Wort, das selbst Präfix des Zielworts ist, bleibt vollständig stehen", () => {
-    const st = L.loadLevel(lvl(["ORQQQT", "......", "......", "......", "......", "......"], "TORAX"));
-    const r = L.performSlide(st, "row", 0, 1); // -> TORQQQ = Präfix von TORAX
-    assert.equal(r.steps.length, 0);
-    assert.equal(st.grid.slice(0, 3).join(""), "TOR");
-    assert.deepEqual([...L.bestPartialRun(st.grid, "TORAX").cells], [idx(0, 0), idx(0, 1), idx(0, 2)]);
+  test("Überlappung in einer Linie (TEE + EIS) wird gemeinsam gelöscht", () => {
+    const g = filler(); plantRow(g, 3, 0, "TEEIS");
+    const w = L.findWords(g).map((x) => x.word);
+    assert.ok(w.includes("TEE") && w.includes("EIS"), w.join(","));
+    assert.deepEqual(L.clearWords(g, L.findWords(g)).cleared, [18, 19, 20, 21, 22]);
   });
+});
 
-  test("Zielwort wird nie zerstört – auch wenn gleichzeitig ein kreuzendes kurzes Wort entsteht", () => {
-    const st = L.loadLevel(lvl(["QMONDQ", ".H....", ".R....", "......", "......", "......"], "MOND"));
-    const r = L.performSlide(st, "row", 0, -1);
-    assert.ok(st.solved, "gelöst");
-    assert.equal(r.steps.length, 0, "nichts gelöscht (Zielwort zuerst erkannt)");
-    assert.equal(st.grid.slice(0, 4).join(""), "MOND");
-    assert.ok(L.findWords(st.grid).some((m) => m.word === "OHR"), "OHR kreuzt wirklich");
+test.describe("Gravitation & Nachfüllen", () => {
+  test("applyGravity lässt fallen, refill füllt von oben", () => {
+    const g = filler(); plantRow(g, 3, 1, "HAUS");
+    const { grid: cleared } = L.clearWords(g, L.findWords(g));
+    const fallen = L.applyGravity(cleared);
+    for (let c = 1; c <= 4; c++) {
+      assert.equal(at(fallen.grid, 0, c), null);
+      assert.equal(at(fallen.grid, 3, c), at(g, 2, c));
+      assert.equal(fallen.fromRow[3 * N + c], 2);
+      assert.equal(at(fallen.grid, 5, c), at(g, 5, c));
+    }
+    const filled = L.refill(fallen.grid, L.createRng(42), fallen.fromRow);
+    assert.ok(filled.grid.every((x) => /^[A-Z]$/.test(x)));
+    assert.equal(filled.added.length, 4);
+    for (let c = 1; c <= 4; c++) assert.equal(filled.fromRow[c], -1);
   });
-
-  test("geschützte Kacheln fallen nicht; Nachfüllen füllt um sie herum", () => {
-    // Spalte 1: M (needed) in Zeile 2, darunter ein Loch nach dem Löschen von TOR in Zeile 6
-    const g = G("......", "......", "M.....", "......", "......", "OTOR..");
-    const protect = L.neededCells(g, "MOND");
-    assert.ok(protect.has(idx(2, 0)), "M ist verankert");
-    const matches = L.findShortWords(g, { target: "MOND" });
-    assert.ok(matches.some((m) => m.word === "TOR"));
-    const cl = L.clearWords(g, matches, protect);
-    assert.equal(cl.grid[idx(2, 0)], "M");
-    assert.equal(cl.grid[idx(5, 0)], "O", "O von OTOR ist needed (Leserichtung) oder nicht? O at (5,0) is first O");
-    const fallen = L.applyGravity(cl.grid, protect);
-    assert.equal(fallen.grid[idx(2, 0)], "M", "M bleibt in Zeile 3");
-    assert.equal(fallen.fromRow[idx(2, 0)], 2);
-    // Löcher unter M werden nicht von M gefüllt
-    const filled = L.refill(fallen.grid, L.createRng(1), fallen.fromRow);
-    assert.equal(filled.grid[idx(2, 0)], "M");
-    assert.ok(filled.grid.every((ch) => ch != null));
-  });
-
-  test("Schieben bewegt geschützte Kacheln ganz normal mit der Zeile", () => {
-    const g = G("MO....", "......", "......", "......", "......", "......");
-    const need = L.neededCells(g, "MOND");
-    assert.ok(need.has(idx(0, 0)) && need.has(idx(0, 1)));
-    const slid = L.slideLine(g, "row", 0, 1);
-    assert.equal(slid.slice(0, 6).join(""), "QMOQQQ".replace(/Q/g, "Q"));
-    assert.equal(slid[idx(0, 1)], "M");
-    assert.equal(slid[idx(0, 2)], "O");
-  });
-
-  test("geschützter Fortschritt übersteht Kaskaden (OHR zerbröselt nur ungeschützte Buchstaben)", () => {
-    // M/O senkrecht in Spalte 1 = Präfix MO. Runde 1 löscht TOR in Zeile 6 (ohne M/O).
-    // H und R fallen nach -> OHR durch das geschützte O: O bleibt, H und R zerbröseln.
-    const st = L.loadLevel(lvl(["......", "......", "......", "......", "MHR...", "OTOR.."], "MOND"));
-    const steps = L.cascade(st);
-    assert.ok(steps.length >= 1);
-    assert.deepEqual(steps[0].matches.map((m) => m.word), ["TOR"]);
-    for (const s of steps) assert.ok(!s.cleared.includes(idx(4, 0)) && !s.cleared.includes(idx(5, 0)), "M und O nie gelöscht");
-    assert.equal(st.grid[idx(4, 0)], "M");
-    assert.equal(st.grid[idx(5, 0)], "O");
-  });
-
-  test("Eigenschaft (Zufallsspiel in allen 12 Leveln): benötigte Buchstaben gehen nie verloren", () => {
-    const rng = L.createRng(7);
-    let rounds = 0;
-    const count = (grid, ch) => grid.filter((x) => x === ch).length;
-    for (const lv of L.LEVELS) {
-      const st = L.loadLevel(lv);
-      const needCount = {};
-      for (const ch of st.target) needCount[ch] = (needCount[ch] || 0) + 1;
-      for (let k = 0; k < 150; k++) {
-        if (st.solved) L.reset(st);
-        const axis = L.rngNext(rng) < 0.5 ? "row" : "col", index = Math.floor(L.rngNext(rng) * 6), dir = L.rngNext(rng) < 0.5 ? 1 : -1;
-        if (!L.canSlide(st, axis, index)) continue;
-        const r = L.performSlide(st, axis, index, dir);
-        for (const ch of Object.keys(needCount)) {
-          assert.ok(count(st.grid, ch) >= needCount[ch], `Level ${lv.id}: ${ch} unter den Bedarf gefallen`);
-        }
-        for (const s of r.steps) {
-          rounds++;
-          const prot = L.neededCells(s.gridBefore, st.target);
-          assert.ok(!s.cleared.some((i) => prot.has(i)), `Level ${lv.id}: benötigtes Feld gelöscht`);
-          assert.equal(L.checkTargetWord(s.gridBefore, st.target), null, `Level ${lv.id}: Zielwort gelöscht`);
-        }
+  test("nach beliebigen Zügen ist jede Zelle gefüllt und wortfrei", () => {
+    for (let s = 0; s < 100; s++) {
+      const st = L.startEndless(s);
+      for (let k = 0; k < 40; k++) {
+        L.performSlide(st, k % 2 ? "row" : "col", (k * 7 + s) % 6, k % 3 ? 1 : -1);
+        assert.ok(st.grid.length === 36 && st.grid.every((x) => /^[A-Z]$/.test(x)));
+        assert.equal(L.findWords(st.grid).length, 0);
       }
     }
-    assert.ok(rounds > 50, "genug Lösch-Runden geprüft: " + rounds);
   });
 });
 
-test.describe("Hinweise", () => {
-  test("3 Hinweise pro Level, jeder deckt einen anderen Buchstaben auf, dann keiner mehr", () => {
-    const st = L.loadLevel(1);
-    const hs = [L.useHint(st), L.useHint(st), L.useHint(st)];
-    assert.ok(hs.every(Boolean));
-    assert.equal(new Set(hs.map((h) => h.index)).size, 3);
-    for (const h of hs) assert.equal(h.letter, st.target[h.index]);
-    assert.match(hs[0].text, /Das Wort enthält ein [A-Z]/);
-    assert.match(hs[0].text, /(oberen|unteren) Hälfte/);
-    assert.equal(L.useHint(st), null);
-    assert.equal(st.hintsUsed, 3);
+test.describe("Punkte & Kaskade", () => {
+  test("Basispunkte und Multiplikator", () => {
+    assert.deepEqual([3, 4, 5, 6].map(L.baseWordScore), [10, 25, 60, 150]);
+    assert.deepEqual([1, 2, 3, 4].map(L.comboMultiplier), [1, 1.5, 2, 2.5]);
   });
-  test("Hinweis nennt einen fehlenden Buchstaben (nicht schon richtig liegende)", () => {
-    const st = L.loadLevel(1);
-    const al = L.bestAlignment(st.grid, st.target);
-    const h = L.useHint(st);
-    assert.equal(al.matched[h.index], false);
+  test("cascade-Punkte entsprechen der Formel (unabhängig nachgerechnet)", () => {
+    let multi = 0;
+    for (let s = 0; s < 400; s++) {
+      const st = L.startEndless(s);
+      for (let k = 0; k < 30; k++) {
+        const before = st.score;
+        const res = L.performSlide(st, k % 2 ? "row" : "col", (s + k) % 6, k % 2 ? -1 : 1);
+        let expected = 0;
+        res.steps.forEach((step, i) => {
+          assert.equal(step.level, i + 1);
+          const base = step.matches.reduce((a, m) => a + ({ 3: 10, 4: 25, 5: 60, 6: 150 })[m.length], 0);
+          const pts = Math.round(base * (1 + 0.5 * (step.level - 1)));
+          assert.equal(step.points, pts);
+          expected += pts;
+        });
+        assert.equal(st.score - before, expected);
+        assert.equal(st.combo, res.steps.length);
+        if (res.steps.length >= 2) multi++;
+      }
+    }
+    assert.ok(multi > 0, "keine mehrstufige Kaskade erreicht");
   });
-  test("−20 % pro Hinweis; Hinweise bleiben bei Reset und Undo verbraucht", () => {
-    const st = L.loadLevel(1);
-    L.useHint(st);
-    L.performSlide(st, "row", 1, 1);
-    L.undo(st);
-    L.reset(st);
-    assert.equal(st.hintsUsed, 1);
-    L.performSlide(st, "row", 0, -1);
-    assert.ok(st.solved);
-    assert.equal(st.levelPoints, 48);
-  });
-  test("kein Hinweis im Freien Spiel", () => {
-    assert.equal(L.useHint(L.startFree(1)), null);
+  test("geplante Kaskade: TEE (x1 = 10) löst ROT aus (x1,5 = 15)", () => {
+    const st = L.startEndless(7);
+    const g = filler();
+    plantCol(g, 0, 3, "TEE"); g[2 * N] = "R"; g[5 * N + 1] = "O"; g[5 * N + 2] = "T";
+    assert.deepEqual(L.findWords(g).map((m) => m.word), ["TEE"]);
+    st.grid = g;
+    const steps = L.cascade(st);
+    assert.ok(steps.length >= 2);
+    assert.deepEqual(steps[0].matches.map((m) => m.word), ["TEE"]);
+    assert.equal(steps[0].points, 10);
+    assert.deepEqual(steps[1].matches.map((m) => m.word), ["ROT"]);
+    assert.equal(steps[1].points, 15);
+    assert.equal(st.maxCombo, steps.length);
   });
 });
 
 test.describe("Undo / Reset", () => {
-  test("Undo stellt Grid, Punkte, Züge und PRNG exakt wieder her", () => {
-    const st = L.startFree(77);
-    let undone = 0;
-    for (let k = 0; k < 200 && undone < 5; k++) {
-      const moves = L.allMoves(st);
-      const mv = moves[(k * 5) % moves.length];
-      const before = json(L.takeSnapshot(st));
-      const res = L.performSlide(st, mv.axis, mv.index, mv.dir);
-      if (!res.steps.length) continue;
-      assert.ok(L.undo(st));
-      assert.deepEqual(json(L.takeSnapshot(st)), before);
-      const again = L.performSlide(st, mv.axis, mv.index, mv.dir);
-      assert.deepEqual(json(again.steps.map((s) => s.cleared)), json(res.steps.map((s) => s.cleared)));
-      undone++;
+  test("Undo stellt Grid, Score, Züge, Combo und PRNG-Zustand exakt wieder her", () => {
+    for (let s = 0; s < 200; s++) {
+      const st = L.startEndless(s);
+      const snaps = [];
+      for (let k = 0; k < 25; k++) {
+        snaps.push(snap(st));
+        L.performSlide(st, k % 2 ? "row" : "col", (s + 2 * k) % 6, k % 2 ? 1 : -1);
+      }
+      for (let k = 24; k >= 0; k--) {
+        assert.ok(L.undo(st));
+        assert.equal(snap(st), snaps[k]);
+      }
+      assert.equal(L.undo(st), false);
     }
-    assert.equal(undone, 5);
+  });
+  test("Undo + gleicher Zug -> identisches Ergebnis (PRNG wirklich zurückgesetzt)", () => {
+    const st = L.startDaily(new Date(2026, 10, 22));
+    let found = false;
+    for (let k = 0; k < 300 && !found; k++) {
+      const axis = k % 2 ? "row" : "col";
+      const res = L.performSlide(st, axis, k % 6, 1);
+      if (!res.steps.length) continue;
+      const after = snap(st);
+      L.undo(st);
+      L.performSlide(st, axis, k % 6, 1);
+      assert.equal(snap(st), after);
+      found = true;
+    }
+    assert.ok(found);
   });
   test("History hält >= 20 Schritte", () => {
-    const st = L.startFree(5);
-    for (let k = 0; k < 30; k++) { const m = L.allMoves(st); const mv = m[k % m.length]; L.performSlide(st, mv.axis, mv.index, mv.dir); }
-    assert.ok(st.history.length >= 20);
+    const st = L.startEndless(5);
+    for (let k = 0; k < 80; k++) L.performSlide(st, "row", k % 6, 1);
+    assert.ok(L.HISTORY_LIMIT >= 20);
+    assert.equal(st.history.length, L.HISTORY_LIMIT);
   });
-  test("Reset -> Level-Grid, 0 Züge", () => {
-    const st = L.loadLevel(4);
-    const T = require("../tools/level-tools.js");
-    for (const s of L.levelById(4).solution.slice(0, 2)) { const mv = T.decode(s); L.performSlide(st, mv.axis, mv.index, mv.dir); }
+  test("Reset -> gleiches Startbrett, alles auf 0", () => {
+    const st = L.startDaily(new Date(2026, 10, 22));
+    const start = st.grid.slice();
+    for (let k = 0; k < 10; k++) L.performSlide(st, "col", k % 6, -1);
     L.reset(st);
-    assert.deepEqual(st.grid, L.normalizeGrid(L.levelById(4).grid));
-    assert.equal(st.moves, 0);
+    assert.deepEqual(st.grid, start);
+    assert.equal(st.score + st.moves + st.combo + st.maxCombo, 0);
     assert.equal(st.history.length, 0);
   });
 });
 
-test.describe("Level, Modi, Teilen", () => {
-  test("loadLevel / nextLevel: Gesamtpunkte werden übernommen, nach dem letzten Level null", () => {
-    const st = L.loadLevel(1, { totalScore: 100 });
-    assert.equal(st.score, 100);
-    L.performSlide(st, "row", 0, -1);
-    const nx = L.nextLevel(st);
-    assert.equal(nx.level.id, 2);
-    assert.equal(nx.score, 160);
-    assert.equal(L.nextLevel(L.loadLevel(L.LEVELS.length)), null);
-    assert.throws(() => L.loadLevel(999));
+test.describe("Teilen / Runde beenden", () => {
+  test("Share-Text-Format, Endlos-Label, kein Brett-Spoiler", () => {
+    const st = L.startDaily(new Date(2026, 10, 22));
+    st.moves = 4; st.score = 62; st.maxCombo = 3;
+    assert.equal(L.buildShareText(st), "Letter Slide #326 · 4 Züge · 62 Punkte · 🔥🔥🔥");
+    const e = L.startEndless(1); e.moves = 1; e.score = 10; e.maxCombo = 1;
+    assert.equal(L.buildShareText(e), "Letter Slide Endlos · 1 Zug · 10 Punkte · 🔥");
+    assert.ok(!/[A-Z]{3,}/.test(L.buildShareText(st).replace("Letter Slide", "")));
   });
-  test("Tagesrätsel: gleiches Datum -> gleiches Level, Nummer ab 2026-01-01", () => {
-    const a = L.startDaily(new Date(2026, 10, 22)), b = L.startDaily(new Date(2026, 10, 22));
-    assert.equal(a.level.id, b.level.id);
-    assert.equal(a.puzzleNumber, 326);
-    const ids = new Set(Array.from({ length: 40 }, (_, d) => L.startDaily(new Date(2026, 0, 1 + d)).level.id));
-    assert.ok(ids.size >= 6, "über die Tage wechseln die Level");
-  });
-  test("Freies Spiel: wortfreies Zufallsbrett, kein Zielwort, Seed reproduzierbar", () => {
-    const a = L.startFree(9), b = L.startFree(9);
-    assert.deepEqual(a.grid, b.grid);
-    assert.equal(L.findShortWords(a.grid).length, 0);
-    assert.equal(a.target, null);
-  });
-  test("Teilen-Text: „Wortgarten Level X · Y Punkte · Z Züge“", () => {
-    const st = L.loadLevel(1);
-    L.performSlide(st, "row", 0, -1);
-    assert.equal(L.buildShareText(st), "Wortgarten Level 1 · 60 Punkte · 1 Zug");
-    const d = L.startDaily(new Date(2026, 10, 22));
-    assert.match(L.buildShareText(d), /^Wortgarten Tagesrätsel #326 · Level \d+ · 0 Punkte · 0 Züge$/);
-    assert.ok(!L.buildShareText(st).includes(st.target), "kein Spoiler");
-    assert.equal(L.buildShareText(L.startFree(1)).startsWith("Wortgarten Freies Spiel ·"), true);
+  test("Runde beenden friert ein (keine Züge, kein Undo)", () => {
+    const st = L.startEndless(3);
+    L.performSlide(st, "row", 0, 1);
+    const before = snap(st);
+    L.endRound(st);
+    assert.equal(L.performSlide(st, "row", 1, 1), null);
+    assert.equal(L.undo(st), false);
+    assert.equal(snap(st), before);
   });
 });

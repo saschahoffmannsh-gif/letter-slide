@@ -1,5 +1,5 @@
 /*
- * Wortgarten – SOUND (optional)
+ * Letter Slide – SOUND (optional)
  * ===============================
  * Simpler WebAudio-Klick beim Slide und ein Ton pro Wortlänge (höher bei längeren
  * Wörtern und höheren Kaskadenstufen). Keine Audiodateien.
@@ -74,14 +74,6 @@
     },
 
     click() { this.tone(1400, 0.035, "square", 0.05); },
-    /** Tutorial: falsche Aktion – leiser, weicher Ton. */
-    nope() { this.tone(240, 0.09, "sine", 0.035); },
-    /** Zielwort gelöst: aufsteigender Dur-Akkord. */
-    bloom(length = 5) {
-      const base = 392;
-      [1, 1.25, 1.5, 2].forEach((m, k) => this.tone(base * m, 0.35, "triangle", 0.12, k * 0.09));
-      this.tone(base * 2.5, 0.5, "sine", 0.06, 0.4 + length * 0.01);
-    },
 
     /** Ton pro Wortlänge: 3 = Grundton, 4 = große Terz, 5 = Quinte, 6 = Oktave; +2 Halbtöne pro Kaskadenstufe. */
     word(length, level) {

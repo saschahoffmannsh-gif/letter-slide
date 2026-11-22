@@ -1,11 +1,6 @@
 # Letter Slide – Original-Spezifikation
 
-> **Aktueller Stand: Wortgarten.** Das Spiel folgt den Regeln in `README.md`.
-> Stein, Brunnen und Trieb sind entfernt. Kurze Wörter (3–5 Buchstaben) zerbröseln weiterhin und
-> werden von oben nachgefüllt. Benötigte Zielbuchstaben (`neededCells`) zerbröseln nie und bleiben
-> bei der Gravitation stehen; Schieben bewegt sie normal. Punkte: Länge × 10 × Kaskade × Hinweis-Abzug.
-
-Das Folgende ist das unveränderte Design-Dokument von Sascha Hoffmann (historische Letter-Slide-Spec).
+> Design-Dokument von Sascha Hoffmann (unverändert übernommen).
 
 ```text
 Baue mir einen spielbaren Prototyp meines Wort-Puzzles "Letter Slide". Bitte als einzelne HTML-Datei mit JavaScript und Canvas oder DOM-Grid. Keine Assets, keine echte Grafik: nur farbige Kacheln, Buchstaben, Zahlen und einfache UI. Es muss sofort im Browser laufen. Sauberer, kommentierter Code. Trenne Spiellogik, Rendering und Eingabe.

@@ -1,9 +1,8 @@
 /*
- * Wortgarten – KONFIGURATION
- * ===========================
+ * Letter Slide – KONFIGURATION
+ * ============================
  * Alles, was man typischerweise austauschen oder feinjustieren will, steht hier:
- * Wortliste, Buchstaben-Gewichtung, Punkteformel, Limits, Modi.
- * (Die Level selbst stehen in src/levels.js.)
+ * Wortliste, Buchstaben-Gewichtung, Punkteformel, Limits und die Modus-Registry.
  *
  * Läuft im Browser (klassisches <script>, legt `LetterSlideConfig` global ab)
  * und in Node (`require("./config.js")`). Keine Abhängigkeiten.
@@ -111,73 +110,55 @@
   const USE_UNIFORM_LETTERS = false;
 
   /*
-   * ======================================================================
-   * WORTGARTEN – REGELN  >>> HIER ANPASSEN <<<
-   * ======================================================================
+   * PUNKTEFORMEL  >>> HIER ANPASSEN <<<
+   * Basispunkte pro Wortlänge (Länge >= 6 nutzt den Wert für 6) und der
+   * Kaskaden-Multiplikator 1 + COMBO_STEP * (Stufe - 1)  ->  x1, x1.5, x2, x2.5 ...
+   * Punkte einer Kaskadenstufe = round(Summe der Basispunkte aller Wörter * Multiplikator)
+   * (berechnet in cascade() in logic.js).
    */
-
-  /** Kurze Wörter: Länge SHORT_MIN..SHORT_MAX. Sie zerbröseln (0 Punkte) und werden von oben nachgefüllt. */
-  const SHORT_MIN = 3;
-  const SHORT_MAX = 5;
-  /**
-   * Mindestlänge einer „Teilfolge am Stück“ (bestPartialRun): ab dieser Länge erscheint der
-   * Fortschritt in den Slots. Einzelne benötigte Zielbuchstaben sind trotzdem geschützt
-   * (siehe neededCells in logic.js).
-   */
-  const PROTECT_MIN = 2;
-
-  /*
-   * PUNKTEFORMEL fürs Zielwort  >>> HIER ANPASSEN <<<
-   *   Punkte = Länge × POINTS_PER_LETTER
-   *            × Kaskaden-Multiplikator × (1 − HINT_PENALTY × benutzte Hinweise)
-   *   Kaskaden-Multiplikator = 1 + COMBO_STEP × (Anzahl Löschrunden, bevor das Zielwort entstand)
-   *            -> direkt durch den Slide ×1, nach 1 Kaskade ×1,5, nach 2 ×2 …
-   *   (berechnet in targetScore() in logic.js)
-   */
-  const POINTS_PER_LETTER = 10;
+  const SCORE_BY_LENGTH = { 3: 10, 4: 25, 5: 60, 6: 150 };
   const COMBO_STEP = 0.5;
-  const HINTS_PER_LEVEL = 3;
-  const HINT_PENALTY = 0.2;
 
   /** Undo-Tiefe (Spec: mindestens 20). */
   const HISTORY_LIMIT = 50;
   /** Sicherheitsgrenze gegen theoretisch endlose Kaskaden. */
   const MAX_CASCADE_LEVELS = 100;
-  /** Max. Versuche, ein wortfreies Startbrett zu würfeln (Freies Spiel). */
+  /** Max. Versuche, ein wortfreies Startbrett zu würfeln. */
   const MAX_BOARD_ATTEMPTS = 5000;
   /** Tag 1 der Tagesrätsel-Nummerierung (lokales Datum). */
   const DAILY_EPOCH = "2026-01-01";
 
   /*
-   * MODI
-   *   level  – Level 1..n aus src/levels.js (Fortschritt in localStorage)
-   *   daily  – Tagesrätsel: ein Level aus der Liste, per Datum gewählt (für alle gleich)
-   *   free   – Freies Spiel: Zufallsbrett, kein Zielwort (kurze Wörter zerbröseln, zum Ausprobieren)
-   *   title(state)    Anzeige unter dem Titel
-   *   shareTag(state) Kennung im Teilen-Text
+   * MODI – Registry. Neuer Modus = neuer Eintrag. Der Button oben erscheint automatisch.
+   *   label            Text des Modus-Buttons
+   *   seed(ctx, h)     liefert den uint32-Seed. ctx = { dateKey, date, seed }, h = Hilfsfunktionen
+   *                    aus logic.js ({ hashString, randomSeed })
+   *   shareTag(state)  Kennung im Teilen-Text (z. B. "#326" oder "Endlos")
+   *   title(state)     Anzeige im HUD
    */
   const MODES = {
-    level: {
-      id: "level", label: "Level",
-      title: (s) => `Level ${s.level.id} von ${s.levelCount}`,
-      shareTag: (s) => `Level ${s.level.id}`
-    },
     daily: {
-      id: "daily", label: "Tagesrätsel",
-      title: (s) => `Tagesrätsel #${s.puzzleNumber}`,
-      shareTag: (s) => `Tagesrätsel #${s.puzzleNumber} · Level ${s.level.id}`
+      id: "daily",
+      label: "Tagesrätsel",
+      /** Seed aus dem lokalen Datum "YYYY-MM-DD" -> weltweit gleiches Brett pro Kalendertag. */
+      seed: (ctx, h) => h.hashString(ctx.dateKey),
+      shareTag: (state) => `#${state.puzzleNumber}`,
+      title: (state) => `Tagesrätsel #${state.puzzleNumber}`
     },
-    free: {
-      id: "free", label: "Freies Spiel",
-      title: () => "Freies Spiel",
-      shareTag: () => "Freies Spiel"
+    endless: {
+      id: "endless",
+      label: "Endlos",
+      /** Zufälliger Seed bei jedem Start (oder übergebener Seed, z. B. für Tests). */
+      seed: (ctx, h) => (ctx.seed != null ? ctx.seed >>> 0 : h.randomSeed()),
+      shareTag: () => "Endlos",
+      title: () => "Endlos"
     }
   };
 
   const config = {
     GRID_SIZE, MIN_WORD_LENGTH, WORD_LIST_RAW, LETTER_WEIGHTS, USE_UNIFORM_LETTERS,
-    SHORT_MIN, SHORT_MAX, PROTECT_MIN, POINTS_PER_LETTER, COMBO_STEP, HINTS_PER_LEVEL, HINT_PENALTY,
-    HISTORY_LIMIT, MAX_CASCADE_LEVELS, MAX_BOARD_ATTEMPTS, DAILY_EPOCH, MODES
+    SCORE_BY_LENGTH, COMBO_STEP, HISTORY_LIMIT, MAX_CASCADE_LEVELS, MAX_BOARD_ATTEMPTS,
+    DAILY_EPOCH, MODES
   };
 
   if (typeof module !== "undefined" && module.exports) module.exports = config;
