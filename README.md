@@ -26,6 +26,11 @@ unverändert übernommen; neue Elemente nutzen dieselben Komponenten und Theme-V
 | waagerecht in der unteren Hälfte (Zeile 4–6) oder senkrecht links (Spalte 1–3) | **Stein** (grau, Stein) | Buchstabe ist fixiert: wird beim Schieben übersprungen, fällt nicht |
 | senkrecht rechts (Spalte 4–6) oder waagerecht oben (Zeile 1–3) | **Brunnen** (blau, Tropfen) | Zielwort-Buchstaben auf Brunnen **verdoppeln** die Punkte |
 
+- **Zielwort-Fortschritt ist geschützt:** Die längste richtige Teilfolge des Zielworts im Brett
+  (mindestens 2 Buchstaben am Stück in Leserichtung, z. B. `WAERM` für WAERME) ist zart lila
+  unterstrichen. Ein kurzes Wort, das eines dieser Felder benutzt, wird **nicht** gelöscht und
+  pflanzt nichts – auch nicht, wenn es selbst ein Präfix des Zielworts in derselben Linie ist
+  (z. B. TOR bei TORTE: das ist einfach Fortschritt).
 - Danach fallen Buchstaben nach unten, oben wird nachgefüllt; neue Wörter lösen **Kaskaden** aus.
 - **Punkte fürs Zielwort:** `Länge × 10 × 2^(Brunnen im Wort) × (1 + 0,5 × Kaskaden) × (1 − 0,2 × Hinweise)`.
   Gesamtpunkte = Summe der besten Ergebnisse aller Level.
@@ -76,6 +81,17 @@ genau 1 Zug, Level 2 mindestens 3, Level 3 mindestens 6 (`FULL=1 npm test`).
   Feldes (bleibt liegen, Buchstaben laufen durch). **Trieb** gehört zum Buchstaben und fällt mit.
 - **Trieb:** ersetzt den Buchstaben des nächsten freien Feldes im Uhrzeigersinn um das Wort
   (Start oben links) durch Q/X/Y/J – Auswahl per geseedetem Zufall (Mulberry32).
+- **Schutz des Fortschritts:** „Fortschritt“ = `bestPartialRun()` in `logic.js`: längste
+  zusammenhängende Folge (waagerecht links→rechts bzw. senkrecht oben→unten), die ein Stück des
+  Zielworts in richtiger Reihenfolge bildet, ab `PROTECT_MIN` = 2 Buchstaben (`config.js`).
+  Gleichstand: Anfang des Zielworts bevorzugt, dann erste Linie – es gibt also genau eine
+  geschützte Folge. Sie wird **in jeder Lösch-Runde neu** bestimmt (auch mitten in Kaskaden).
+  Kurze Wörter, die ein geschütztes Feld enthalten, werden nicht gelöscht und pflanzen keinen
+  Modifikator. Spiel, Vorschau, „Was passiert?“, Löser, Level-Tests und Brett-Markierung benutzen
+  dieselbe Funktion. Nicht verhindert wird, dass geschützte Buchstaben durch Schwerkraft
+  nachrutschen, wenn **darunter** ein anderes kurzes Wort gelöscht wird (sie bleiben erhalten,
+  die Folge kann sich aber verschieben). Das Startbrett eines Levels muss weiterhin ganz ohne kurze
+  Wörter sein (die Prüfung ignoriert den Schutz).
 - **Zielwort** zählt nur exakt (nicht als Teil eines längeren Worts) und wird nie als kurzes Wort
   gelöscht. Geprüft wird vor jeder Lösch-Runde, also auch mitten in einer Kaskade.
 - **Nachfüllen** ist deterministisch (Seed `wortgarten:<id>` bzw. `wortgarten-daily:<datum>`):
@@ -209,7 +225,7 @@ Kernfunktionen in `src/logic.js`: `slideLine`, `findWords`, `checkTargetWord`, `
    ```
 2. Regeln: nur A–Z (Umlaute ausschreiben), Länge 4–6, Startbrett ohne Zielwort und ohne kurze
    Wörter, alle Zielbuchstaben im Grid. `node tools/solve-level.js 13` prüft das Level und sucht eine
-   Lösung; Ein Brett aus einem Zielwort erzeugen: Eintrag in `SPECS` in `tools/generate-levels.js` ergänzen und `node tools/generate-levels.js 13` aufrufen.
+   Lösung; Ein Brett aus einem Zielwort erzeugen: Eintrag in `SPECS` in `tools/generate-levels.js` ergänzen und `node tools/generate-levels.js 13` aufrufen (`SEED=…` für andere Kandidaten).
 3. `npm test` – `tests/levels.test.js` prüft automatisch Daten, Lösbarkeit und Referenzlösung
    (bei mehr als 12 Leveln die Zahl im ersten Test anpassen). Startseite, Kopfzeile
    „Level X von N“ und Tagesrätsel richten sich nach `LEVELS.length`.
@@ -253,7 +269,10 @@ Brunnen bleibt / Trieb fällt mit, exakter Zielwort-Treffer (nicht in längerem 
 Kaskade, Punkteformel inkl. Brunnen/Kaskade/Hinweise, Vorschau = tatsächliches Ergebnis ohne
 Zustandsänderung, Hinweise, Undo/Reset stellen Modifikatoren exakt wieder her, Determinismus,
 Tagesrätsel, Teilen-Text; alle 12 Level gültig, Progression, jede Referenzlösung löst ihr Level,
-Mindestzugzahlen per Löser, Fortschritt in `localStorage`.
+Mindestzugzahlen per Löser, Fortschritt in `localStorage`; Fortschritts-Schutz: kreuzendes kurzes
+Wort durch ein geschütztes Feld bleibt stehen, Präfix in derselben Linie bleibt stehen, Zielwort
+wird nie zerstört, Schutz übersteht Kaskaden, plus Zufallsspiel in allen 12 Leveln
+(kein geschütztes Feld und kein Zielwort wird je gelöscht).
 
 Optionaler Browser-Test (lokales Chrome, nicht in CI):
 

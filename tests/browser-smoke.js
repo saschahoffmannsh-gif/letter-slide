@@ -39,6 +39,22 @@ const modalTitle = (page) => page.$eval("#modal-title", (e) => e.textContent);
 const press = async (page, sel, touch) => { if (touch) await page.tap(sel); else await page.click(sel); };
 const answer = async (page, value, touch) => { await press(page, value ? `#modal-actions button[data-value="${value}"]` : "#modal-actions button", touch); await modalGone(page); };
 const waitScreen = (page, name) => page.waitForFunction((n) => LetterSlideApp.screen === n && !document.getElementById(n).hidden && !document.getElementById(n).classList.contains("off"), { timeout: 5000 }, name);
+/** Offene Tutorial-Tipps nach einem Zug schließen (Reihenfolge kann je nach Brett variieren). */
+async function dismissTips(page, touch) {
+  for (let k = 0; k < 4; k++) {
+    await sleep(150);
+    if (!(await page.evaluate(() => LetterSlideApp.modalOpen))) return;
+    await press(page, "#modal-actions button", touch); // nächster Tipp kann direkt folgen
+    await sleep(400);
+  }
+}
+/** Markierte (geschützte) Felder im DOM == Regel der Logik? */
+const protectCheck = (page) => page.evaluate(() => {
+  const g = LetterSlideApp.game;
+  const want = [...LetterSlideLogic.protectedCells(g.grid, g.target)].sort((a, b) => a - b);
+  const have = [...document.querySelectorAll("#board .tile.protected")].map((t) => Number(t.dataset.r) * 6 + Number(t.dataset.c)).sort((a, b) => a - b);
+  return { want, have };
+});
 const shot = async (page, name) => { if (SHOTS) await page.screenshot({ path: path.join(SHOTS, PREFIX + name) }); };
 
 /** Design-Check: bestehende Theme-Variablen sind weiter aktiv. */
@@ -88,6 +104,9 @@ async function desktop(browser) {
   ok(/Warmes/.test(await page.$eval("#target-hint", (e) => e.textContent)), "Hinweistext „etwas Warmes“");
   ok(/Stein:\s*0.*Brunnen:\s*0.*Trieb:\s*0/s.test(await page.$eval("#modstatus", (e) => e.textContent)), "Modifikator-Status „Stein: 0 | Brunnen: 0 | Trieb: 0“");
   await designCheck(page);
+  const pc = await protectCheck(page);
+  ok(pc.want.length === 5 && JSON.stringify(pc.want) === JSON.stringify(pc.have), `Fortschritt WAERM (5 Felder) dezent markiert: ${pc.have.join(",")}`);
+  ok(await page.$eval("#board .tile.protected .face", (f) => getComputedStyle(f, "::after").content !== "none"), "Unterstrich an geschützten Kacheln");
 
   // „Was passiert?“
   await page.click("#btn-whatif"); await waitModal(page, /Was passiert/); ok(true, "„Was passiert?“-Dialog"); await answer(page, "ok");
@@ -170,8 +189,10 @@ async function iphone(browser) {
   await shot(page, "preview.png");
   ok(await page.$eval("#board .tile.preview", (e) => e.classList.contains("p-stein") && !!e.querySelector(".preview-ic")), "Vorschau zeigt Stein-Icon");
   await page.waitForFunction(() => !LetterSlideApp.busy || LetterSlideApp.modalOpen, { timeout: 20000 });
-  await waitModal(page, /Stein/).then(() => answer(page, "ok", true), () => {});
   await idle(page);
+  await dismissTips(page, true);
+  const pc4 = await protectCheck(page);
+  ok(JSON.stringify(pc4.want) === JSON.stringify(pc4.have), "Level 4: Markierung = geschützte Felder der Logik");
   ok((await page.$$("#board .tile.mod-stein")).length >= 1, "Stein-Kachel liegt auf dem Brett");
   ok(Number(await page.$eval("#count-stein", (e) => e.textContent)) >= 1, "Stein-Zähler erhöht");
   // Undo stellt den Modifikator-Zustand wieder her

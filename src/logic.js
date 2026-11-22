@@ -35,7 +35,7 @@
 
   const {
     GRID_SIZE, MIN_WORD_LENGTH, WORD_LIST_RAW, LETTER_WEIGHTS, USE_UNIFORM_LETTERS,
-    SHORT_MIN, SHORT_MAX, POINTS_PER_LETTER, BRUNNEN_FACTOR, COMBO_STEP, HINTS_PER_LEVEL, HINT_PENALTY,
+    SHORT_MIN, SHORT_MAX, PROTECT_MIN, POINTS_PER_LETTER, BRUNNEN_FACTOR, COMBO_STEP, HINTS_PER_LEVEL, HINT_PENALTY,
     MODIFIER_RULES, RARE_LETTERS, HISTORY_LIMIT, MAX_CASCADE_LEVELS, MAX_BOARD_ATTEMPTS, DAILY_EPOCH, MODES
   } = CONFIG;
   const N = GRID_SIZE;
@@ -197,14 +197,51 @@
   function checkBoard(grid) { return findWords(grid, DICTIONARY); }
 
   /**
+   * bestPartialRun – der aktuelle Zielwort-Fortschritt: längste zusammenhängende Folge im Brett
+   * (waagerecht links→rechts bzw. senkrecht oben→unten), die ein Stück des Zielworts in der
+   * richtigen Reihenfolge bildet (Länge >= PROTECT_MIN). Gleichstand: Anfang des Zielworts
+   * bevorzugt, dann erste Linie (Zeilen vor Spalten, oben/links zuerst) – also eindeutig.
+   * @returns { cells, axis, line, start, from, length } oder null
+   *   from = Position im Zielwort, an der die Folge beginnt (0 = Präfix)
+   */
+  function bestPartialRun(grid, target) {
+    if (!target || target.length < PROTECT_MIN) return null;
+    let best = null;
+    for (const line of LINES) {
+      for (let s = 0; s < N; s++) for (let o = 0; o < target.length; o++) {
+        let k = 0;
+        while (s + k < N && o + k < target.length && grid[line.cells[s + k]] === target[o + k]) k++;
+        if (k < PROTECT_MIN) continue;
+        if (!best || k > best.length || (k === best.length && o < best.from)) {
+          best = { cells: line.cells.slice(s, s + k), axis: line.axis, line: line.index, start: s, from: o, length: k };
+        }
+      }
+    }
+    return best;
+  }
+
+  /** protectedCells – Felder des Zielwort-Fortschritts (Set von Indizes; leer ohne Zielwort). */
+  function protectedCells(grid, target) {
+    const run = bestPartialRun(grid, target);
+    return new Set(run ? run.cells : []);
+  }
+
+  /**
    * findShortWords – kurze Wörter (SHORT_MIN..SHORT_MAX), die gelöscht werden und Modifikatoren
-   * pflanzen. Ausgenommen: das Zielwort selbst und Wörter, die nur aus Stein-Feldern bestehen
-   * (die könnten nie gelöscht werden -> sonst Endlos-Kaskade).
+   * pflanzen. Ausgenommen:
+   *   - das Zielwort selbst,
+   *   - Wörter, die nur aus Stein-Feldern bestehen (sonst Endlos-Kaskade),
+   *   - Wörter, die ein GESCHÜTZTES Feld (Zielwort-Fortschritt, siehe bestPartialRun) enthalten:
+   *     sie werden nicht gelöscht und pflanzen nichts. Das gilt auch für ein kurzes Wort, das
+   *     selbst ein Präfix des Zielworts in derselben Linie ist – das ist einfach Fortschritt.
+   * opts.protect: Set geschützter Felder; fehlt es, wird es aus opts.target berechnet.
    */
   function findShortWords(grid, opts = {}) {
     const { target = null, cellMod = null } = opts;
+    const protect = opts.protect || protectedCells(grid, target);
     return findWords(grid).filter((m) => m.length >= SHORT_MIN && m.length <= SHORT_MAX && m.word !== target &&
-      !(cellMod && m.cells.every((i) => cellMod[i] === "stein")));
+      !(cellMod && m.cells.every((i) => cellMod[i] === "stein")) &&
+      !m.cells.some((i) => protect.has(i)));
   }
 
   /**
@@ -746,7 +783,7 @@
     if (grid.length !== N * N || !grid.every((x) => /^[A-Z]$/.test(x))) problems.push("Grid muss 6×6 Buchstaben A–Z sein");
     else {
       if (checkTargetWord(grid, t)) problems.push("Zielwort steht schon im Start-Grid");
-      const sw = findShortWords(grid, { target: t });
+      const sw = findShortWords(grid, { target: t, protect: new Set() }); // Startbrett streng: gar keine kurzen Wörter
       if (sw.length) problems.push(`Start-Grid enthält kurze Wörter: ${sw.map((m) => m.word).join(", ")}`);
       const count = (s) => [...s].reduce((m, ch) => ((m[ch] = (m[ch] || 0) + 1), m), {});
       const have = count(grid.join("")), need = count(t);
@@ -763,7 +800,7 @@
     modifierTypeFor, targetCellFor, clockwiseRing, placeModifier, planModifiers, applyModifiers, countModifiers,
     comboMultiplier, targetScore, cascade, normalizeGrid, levelById, loadLevel, nextLevel, dailyLevelIndex,
     startDaily, startFree, generateStartBoard, takeSnapshot, restoreSnapshot, performSlide, undo, reset,
-    cloneState, previewModifiers, allMoves, whatIf, bestAlignment, useHint, buildShareText, validateLevel
+    cloneState, previewModifiers, allMoves, whatIf, bestAlignment, bestPartialRun, protectedCells, useHint, buildShareText, validateLevel
   };
 
   if (IS_NODE) module.exports = api;

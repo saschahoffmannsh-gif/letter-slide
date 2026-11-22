@@ -197,6 +197,87 @@ test.describe("Zielwort", () => {
   });
 });
 
+test.describe("Zielwort-Fortschritt ist geschützt", () => {
+  test("bestPartialRun: längste richtige Teilfolge (>= 2), Präfix bevorzugt", () => {
+    const g = G("MO....", "......", "...ND.", "......", "......", "......");
+    const run = L.bestPartialRun(g, "MOND");
+    assert.deepEqual(run.cells, [idx(0, 0), idx(0, 1)]);
+    assert.equal(run.from, 0);
+    assert.equal(L.bestPartialRun(G("M.....", "......", "......", "......", "......", "......"), "MOND"), null, "1 Buchstabe ist kein Fortschritt");
+    assert.equal(L.protectedCells(g, null).size, 0, "ohne Zielwort nichts geschützt");
+  });
+
+  test("kreuzendes kurzes Wort durch ein geschütztes Feld wird NICHT gelöscht (und pflanzt nichts)", () => {
+    // MO steht in Zeile 1; Zeile 3 nach rechts -> senkrecht OHR in Spalte 2 durch das geschützte O
+    const rows = ["MO....", ".H....", "R.....", "......", "......", "......"];
+    const st = L.loadLevel(lvl(rows, "MOND"));
+    const r = L.performSlide(st, "row", 2, 1);
+    assert.equal(r.steps.length, 0, "OHR bleibt stehen");
+    assert.deepEqual([idx(0, 0), idx(0, 1), idx(1, 1), idx(2, 1)].map((i) => st.grid[i]).join(""), "MOHR");
+    assert.equal(L.countModifiers(st).stein + L.countModifiers(st).brunnen + L.countModifiers(st).trieb, 0);
+    // Gegenprobe ohne Zielwort-Fortschritt: OHR wird gelöscht
+    const free = L.loadLevel(lvl(rows, "ZZZZ"));
+    const r2 = L.performSlide(free, "row", 2, 1);
+    assert.equal(r2.steps.length, 1);
+    assert.deepEqual(r2.steps[0].matches.map((m) => m.word), ["OHR"]);
+  });
+
+  test("kurzes Wort, das selbst Präfix des Zielworts in derselben Linie ist, bleibt als Fortschritt stehen", () => {
+    const st = L.loadLevel(lvl(["ORQQQT", "......", "......", "......", "......", "......"], "TORAX"));
+    const r = L.performSlide(st, "row", 0, 1); // -> TOR.. = Präfix von TORAX
+    assert.equal(r.steps.length, 0);
+    assert.equal(st.grid.slice(0, 3).join(""), "TOR");
+    assert.deepEqual([...L.protectedCells(st.grid, "TORAX")], [idx(0, 0), idx(0, 1), idx(0, 2)]);
+    // Vorschau / „Was passiert?“ benutzen dieselbe Regel: kein Modifikator angekündigt
+    const st2 = L.loadLevel(lvl(["ORQQQT", "......", "......", "......", "......", "......"], "TORAX"));
+    assert.equal(L.previewModifiers(st2, "row", 0, 1).placements.length, 0);
+    assert.ok(!L.whatIf(st2).some((m) => m.axis === "row" && m.index === 0 && m.dir === 1));
+  });
+
+  test("Zielwort wird nie zerstört – auch wenn gleichzeitig ein kreuzendes kurzes Wort entsteht", () => {
+    // Zeile 1 nach links -> MOND, gleichzeitig OHR senkrecht durch das O
+    const st = L.loadLevel(lvl(["QMONDQ", ".H....", ".R....", "......", "......", "......"], "MOND"));
+    const r = L.performSlide(st, "row", 0, -1);
+    assert.ok(st.solved, "gelöst");
+    assert.equal(r.steps.length, 0, "nichts gelöscht");
+    assert.equal(st.grid.slice(0, 4).join(""), "MOND");
+    assert.ok(L.findWords(st.grid).some((m) => m.word === "OHR"), "OHR kreuzt wirklich");
+  });
+
+  test("geschützter Fortschritt übersteht Kaskaden", () => {
+    // M/O senkrecht in Spalte 1 (Zeilen 5–6) = Präfix MO. Runde 1 löscht TOR in Zeile 6,
+    // H und R fallen nach -> Runde 2 sähe OHR durch das geschützte O: wird nicht gelöscht.
+    const st = L.loadLevel(lvl(["......", "......", "......", "......", "MHR...", "OTOR.."], "MOND"));
+    const steps = L.cascade(st);
+    assert.ok(steps.length >= 1);
+    assert.deepEqual(steps[0].matches.map((m) => m.word), ["TOR"]);
+    assert.equal([idx(4, 0), idx(5, 0), idx(5, 1), idx(5, 2)].map((i) => st.grid[i]).join(""), "MOHR");
+    for (const s of steps) assert.ok(!s.cleared.includes(idx(4, 0)) && !s.cleared.includes(idx(5, 0)), "M und O nie gelöscht");
+    assert.ok(!steps.slice(1).some((s) => s.matches.some((m) => m.word === "OHR")));
+  });
+
+  test("Eigenschaft (Zufallsspiel in allen 12 Leveln): geschützte Felder und Zielwort werden nie gelöscht", () => {
+    const rng = L.createRng(7);
+    let rounds = 0;
+    for (const lv of L.LEVELS) {
+      const st = L.loadLevel(lv);
+      for (let k = 0; k < 150; k++) {
+        if (st.solved) L.reset(st);
+        const axis = L.rngNext(rng) < 0.5 ? "row" : "col", index = Math.floor(L.rngNext(rng) * 6), dir = L.rngNext(rng) < 0.5 ? 1 : -1;
+        if (!L.canSlide(st, axis, index)) continue;
+        const r = L.performSlide(st, axis, index, dir);
+        for (const s of r.steps) {
+          rounds++;
+          const prot = L.protectedCells(s.gridBefore, st.target);
+          assert.ok(!s.cleared.some((i) => prot.has(i)), `Level ${lv.id}: geschütztes Feld gelöscht`);
+          assert.equal(L.checkTargetWord(s.gridBefore, st.target), null, `Level ${lv.id}: Zielwort gelöscht`);
+        }
+      }
+    }
+    assert.ok(rounds > 50, "genug Lösch-Runden geprüft: " + rounds);
+  });
+});
+
 test.describe("Vorschau", () => {
   test("previewModifiers entspricht exakt dem echten Zug und verändert nichts", () => {
     const st = L.startFree(1234);

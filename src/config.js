@@ -119,6 +119,11 @@
   /** Kurze Wörter (Werkzeuge): Länge SHORT_MIN..SHORT_MAX. Sie geben 0 Punkte, pflanzen Modifikatoren. */
   const SHORT_MIN = 3;
   const SHORT_MAX = 5;
+  /**
+   * Zielwort-Fortschritt schützen: die längste richtige Teilfolge des Zielworts im Brett (ab dieser
+   * Länge) wird nicht von kreuzenden kurzen Wörtern zerstört (siehe bestPartialRun in logic.js).
+   */
+  const PROTECT_MIN = 2;
 
   /*
    * PUNKTEFORMEL fürs Zielwort  >>> HIER ANPASSEN <<<
@@ -195,7 +200,7 @@
 
   const config = {
     GRID_SIZE, MIN_WORD_LENGTH, WORD_LIST_RAW, LETTER_WEIGHTS, USE_UNIFORM_LETTERS,
-    SHORT_MIN, SHORT_MAX, POINTS_PER_LETTER, BRUNNEN_FACTOR, COMBO_STEP, HINTS_PER_LEVEL, HINT_PENALTY,
+    SHORT_MIN, SHORT_MAX, PROTECT_MIN, POINTS_PER_LETTER, BRUNNEN_FACTOR, COMBO_STEP, HINTS_PER_LEVEL, HINT_PENALTY,
     MODIFIER_RULES, RARE_LETTERS, PREVIEW_MS,
     HISTORY_LIMIT, MAX_CASCADE_LEVELS, MAX_BOARD_ATTEMPTS, DAILY_EPOCH, MODES
   };

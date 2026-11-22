@@ -43,6 +43,7 @@
   /** Tutorial-Texte (Spec). intro = beim Levelstart, first = beim ersten entstandenen Modifikator. */
   const TIPS = {
     intro1: { level: 1, title: "Willkommen im Wortgarten", body: "Jedes Level versteckt ein <b>Zielwort</b>. Du kennst nur den Hinweis und die Länge. Schiebe Zeilen und Spalten, bis das Wort waagerecht oder senkrecht dasteht." },
+    protect: { any: true, minLevel: 2, title: "Fortschritt geschützt", body: "Stehen schon mindestens zwei Buchstaben des Zielworts <b>richtig am Stück</b>, sind sie zart lila unterstrichen. Kurze Wörter, die eines dieser Felder benutzen, zerbröseln dann nicht – dein Fortschritt bleibt liegen." },
     intro4: { level: 4, title: "Neu: Steine", icon: "stein", body: "Kurze Wörter (3–5 Buchstaben) <b>waagerecht in der unteren Hälfte</b> oder <b>senkrecht in der linken Hälfte</b> pflanzen einen Stein – rechts neben bzw. unter das Wort." },
     first_stein: { level: 4, type: "stein", title: "Ein Stein!", icon: "stein", body: "Kurze Wörter pflanzen Steine. Steine fixieren Buchstaben. Nutze sie, um dein Zielwort zu bauen." },
     intro7: { level: 7, title: "Neu: Brunnen", icon: "brunnen", body: "Kurze Wörter <b>senkrecht in der rechten Hälfte</b> oder <b>waagerecht in der oberen Hälfte</b> lassen einen Brunnen entstehen." },
@@ -162,6 +163,7 @@
     if (game.solved) return levelComplete();
     // Tutorial: erster Modifikator eines Typs
     for (const step of result.steps) for (const p of step.placed) await maybeTip(`first_${p.type}`);
+    if (L.protectedCells(game.grid, game.target).size) await maybeTip("protect");
   }
 
   /** Spielstand/Level starten und zum Spiel wechseln. */
@@ -187,7 +189,7 @@
   async function maybeTip(key) {
     const tip = TIPS[key];
     if (!tip || !game || game.modeId !== "level" || stats.tips[key]) return;
-    if (tip.type ? game.level.id < tip.level || !game.enabled[tip.type] : game.level.id !== tip.level) return;
+    if (tip.any ? game.level.id < tip.minLevel : tip.type ? game.level.id < tip.level || !game.enabled[tip.type] : game.level.id !== tip.level) return;
     stats.tips[key] = true;
     save();
     const icon = tip.icon ? `<div class="tip-ic"><div class="tile tile-mini mod-${tip.icon}"><div class="face">${{ stein: "S", brunnen: "B", trieb: "Q" }[tip.icon]}<svg class="mod-ic" aria-hidden="true"><use href="#${{ stein: "i-stone", brunnen: "i-drop", trieb: "i-sprout" }[tip.icon]}"/></svg></div></div></div>` : "";
@@ -338,6 +340,7 @@
           <li><svg aria-hidden="true"><use href="#i-drop"/></svg><span><b>Brunnen</b> – senkrecht rechts oder waagerecht oben: läuft das Zielwort hindurch, zählt es ×${C.BRUNNEN_FACTOR} (mehrere: ×4, ×8).</span></li>
         </ul>
         <ul class="howto">
+          <li><b>Fortschritt geschützt:</b> Mindestens zwei richtige Zielwort-Buchstaben am Stück sind zart lila unterstrichen – kurze Wörter, die sie benutzen, zerbröseln nicht.</li>
           <li><b>Vorschau:</b> Felder, die beim nächsten Zug zu Modifikatoren würden, blitzen vorher gelb auf. „Was passiert?“ listet alle solchen Züge.</li>
           <li><b>Punkte:</b> Länge × ${C.POINTS_PER_LETTER} × Brunnen × Kaskade. ${C.HINTS_PER_LEVEL} Hinweise pro Level, je −${pct} %.</li>
         </ul>`,

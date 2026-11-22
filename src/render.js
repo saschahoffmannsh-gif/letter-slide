@@ -123,9 +123,14 @@
       const board = this.el.board;
       board.textContent = "";
       const tiles = new Map();
+      // Zielwort des laufenden Spiels merken (Animationen übergeben nur cellMod/sprout)
+      if (mods && "target" in mods) this.target = mods.solved ? null : mods.target;
+      // Zielwort-Fortschritt: geschützte Felder dezent markieren (gleiche Regel wie in der Logik)
+      const prot = this.target ? L.protectedCells(grid, this.target) : null;
       for (let r = 0; r < GRID_SIZE; r++) {
         for (let c = 0; c < GRID_SIZE; c++) {
           const t = this.makeTile(grid[idx(r, c)], r, c, this.modAt(mods, idx(r, c)));
+          if (prot && prot.has(idx(r, c))) t.classList.add("protected");
           board.appendChild(t);
           tiles.set(idx(r, c), t);
         }

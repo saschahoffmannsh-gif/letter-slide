@@ -459,6 +459,14 @@ button.arrow:active:not(:disabled) .arrow-key { transform: translateY(2px); box-
 }
 /* Steine liegen über rutschenden Kacheln (die gleiten „unter“ dem Stein durch) */
 .tile.mod-stein { z-index: 2; }
+/* Zielwort-Fortschritt (geschützt): zarter Lavendel-Schimmer wie die Auswahl + feiner Unterstrich */
+.tile.protected .face::after {
+  content: ""; position: absolute; left: 24%; right: 24%; bottom: 8%; height: 3px; border-radius: 2px;
+  background: var(--lavender-deep); opacity: .7; pointer-events: none;
+}
+.tile.protected:not([class*="mod-"]) .face { --c: var(--tile-sel-line);
+  box-shadow: inset 0 0 0 2px rgba(175,155,224,.35), inset 0 -2px 0 rgba(74,52,38,.05), 0 4px 0 var(--d), 0 5px 8px var(--shadow); }
+
 /* Frisch gepflanzt: kurzer Plopp */
 .tile.planted .face { animation: plant-pop .5s cubic-bezier(.3,1.7,.5,1); }
 @keyframes plant-pop { 0% { transform: scale(.55); } 60% { transform: scale(1.12); } 100% { transform: scale(1); } }

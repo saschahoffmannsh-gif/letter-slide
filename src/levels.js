@@ -55,15 +55,15 @@
     {
       id: 3, hint: "ein Tier", length: 5, target: "KATZE",
       grid: [
-        ["M", "U", "A", "H", "C", "G"],
-        ["A", "K", "T", "S", "G", "L"],
-        ["H", "Z", "N", "I", "Z", "T"],
-        ["E", "N", "H", "A", "Z", "R"],
-        ["B", "M", "Z", "A", "T", "I"],
-        ["Z", "T", "P", "I", "W", "N"]
+        ["L", "I", "T", "E", "R", "E"],
+        ["I", "S", "U", "K", "U", "E"],
+        ["R", "L", "R", "G", "D", "T"],
+        ["E", "A", "E", "E", "R", "G"],
+        ["D", "T", "D", "D", "B", "H"],
+        ["D", "U", "T", "Z", "O", "S"]
       ],
       modifiersEnabled: { stein: false, brunnen: false, trieb: false },
-      solution: ["C1+", "R3+", "C2+", "R5-", "C5+", "C2+"]
+      solution: ["R5+", "R4+", "R6-", "R1-", "C3-", "R2-"]
     },
     // Level 4 – Stein einführen
     {
@@ -125,29 +125,29 @@
     {
       id: 8, hint: "scheint am Himmel", length: 5, target: "SONNE",
       grid: [
-        ["N", "E", "L", "I", "T", "L"],
-        ["R", "E", "K", "T", "G", "O"],
-        ["N", "E", "A", "I", "C", "A"],
-        ["T", "P", "A", "G", "N", "O"],
-        ["K", "M", "S", "E", "N", "U"],
-        ["E", "S", "S", "E", "R", "R"]
+        ["U", "S", "O", "A", "N", "K"],
+        ["D", "G", "F", "E", "A", "W"],
+        ["N", "R", "R", "D", "D", "G"],
+        ["C", "E", "C", "S", "B", "S"],
+        ["I", "P", "G", "T", "C", "Z"],
+        ["O", "S", "A", "N", "E", "B"]
       ],
       modifiersEnabled: { stein: true, brunnen: true, trieb: false },
-      solution: ["C5-", "R3-", "C4+", "C6-", "C5+", "R2+", "R3-"]
+      solution: ["R3+", "R2+", "C2+", "C6+", "R1-", "C5+"]
     },
     // Level 9
     {
       id: 9, hint: "ein Getränk am Morgen", length: 6, target: "KAFFEE",
       grid: [
-        ["K", "N", "D", "E", "U", "I"],
-        ["H", "S", "U", "A", "E", "T"],
-        ["R", "T", "G", "E", "I", "F"],
-        ["C", "E", "H", "S", "Z", "E"],
-        ["K", "C", "F", "F", "E", "K"],
-        ["A", "A", "I", "U", "U", "S"]
+        ["R", "N", "C", "L", "N", "G"],
+        ["C", "I", "P", "N", "S", "R"],
+        ["D", "K", "A", "K", "F", "E"],
+        ["E", "R", "F", "B", "I", "H"],
+        ["B", "R", "D", "G", "R", "H"],
+        ["R", "I", "K", "U", "U", "K"]
       ],
       modifiersEnabled: { stein: true, brunnen: true, trieb: false },
-      solution: ["R4+", "C3+", "R5+", "C1+", "R5-", "C4-", "C5-", "C5-"]
+      solution: ["C5+", "C3-", "R4-", "R2-", "C3-", "R5-", "C4-"]
     },
     // Level 10 – Trieb einführen
     {
