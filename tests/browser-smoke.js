@@ -37,7 +37,7 @@ const waitModal = (page, re) => page.waitForFunction((src) => {
 const modalGone = (page) => page.waitForFunction(() => !LetterSlideApp.modalOpen, { timeout: 5000 });
 const modalTitle = (page) => page.$eval("#modal-title", (e) => e.textContent);
 const press = async (page, sel, touch) => { if (touch) await page.tap(sel); else await page.click(sel); };
-const answer = async (page, value, touch) => { await press(page, value ? `#modal-actions button[data-value="${value}"]` : "#modal-actions button", touch); await modalGone(page); };
+const answer = async (page, value, touch) => { await sleep(300); /* Einblend-Animation des Dialogs abwarten */ await press(page, value ? `#modal-actions button[data-value="${value}"]` : "#modal-actions button", touch); await modalGone(page); };
 const waitScreen = (page, name) => page.waitForFunction((n) => LetterSlideApp.screen === n && !document.getElementById(n).hidden && !document.getElementById(n).classList.contains("off"), { timeout: 5000 }, name);
 /** Offene Tutorial-Tipps nach einem Zug schließen (Reihenfolge kann je nach Brett variieren). */
 async function dismissTips(page, touch) {
