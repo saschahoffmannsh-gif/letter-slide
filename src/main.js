@@ -2,7 +2,7 @@
  * Wortgarten – VERDRAHTUNG / ABLAUFSTEUERUNG
  * ==========================================
  * Hält den Spielzustand, verbindet Eingabe -> Logik -> Rendering, steuert Startseite <-> Spiel,
- * Level-Fortschritt, Vorschau, Hinweise, Tutorial-Tipps und Level-Abschluss, speichert den
+ * Level-Fortschritt, Hinweise, Tutorial-Tipps und Level-Abschluss, speichert den
  * Spielstand (stats.js) und blockiert Eingaben, solange Animationen laufen oder ein Dialog offen ist.
  */
 (function (root) {
@@ -38,8 +38,8 @@
 
   const $ = (id) => document.getElementById(id);
   const btn = {
-    undo: $("btn-undo"), reset: $("btn-reset"), hint: $("btn-hint"), share: $("btn-share"), whatif: $("btn-whatif"),
-    preview: $("btn-preview"), menu: $("btn-menu"), howto: $("btn-howto")
+    undo: $("btn-undo"), reset: $("btn-reset"), hint: $("btn-hint"), share: $("btn-share"),
+    menu: $("btn-menu"), howto: $("btn-howto")
   };
   const startEl = {
     screen: $("start"), level: $("start-level"), levelTitle: $("start-level-title"), levelSub: $("start-level-sub"),
@@ -48,18 +48,10 @@
   };
   const gameScreen = $("game");
   const wait = (ms) => new Promise((res) => setTimeout(res, ms));
-  const NAMES = { stein: "Stein", brunnen: "Brunnen", trieb: "Trieb" };
-
-  /** Tutorial-Texte (Spec). intro = beim Levelstart, first = beim ersten entstandenen Modifikator. */
+  /** Tutorial-Texte. intro = beim Levelstart, protect = sobald Zielbuchstaben auf dem Brett liegen. */
   const TIPS = {
     intro1: { level: 1, title: "Willkommen im Wortgarten", body: "Jedes Level versteckt ein <b>Zielwort</b>. Du kennst nur den Hinweis und die Länge. Schiebe Zeilen und Spalten, bis das Wort waagerecht oder senkrecht dasteht." },
-    protect: { any: true, minLevel: 2, title: "Fortschritt geschützt", body: "Stehen schon mindestens zwei Buchstaben des Zielworts <b>richtig am Stück</b>, sind sie zart lila unterstrichen. Kurze Wörter, die eines dieser Felder benutzen, zerbröseln dann nicht – dein Fortschritt bleibt liegen." },
-    intro4: { level: 4, title: "Neu: Steine", icon: "stein", body: "Kurze Wörter (3–5 Buchstaben) <b>waagerecht in der unteren Hälfte</b> oder <b>senkrecht in der linken Hälfte</b> pflanzen einen Stein – rechts neben bzw. unter das Wort." },
-    first_stein: { level: 4, type: "stein", title: "Ein Stein!", icon: "stein", body: "Kurze Wörter pflanzen Steine. Steine fixieren Buchstaben. Nutze sie, um dein Zielwort zu bauen." },
-    intro7: { level: 7, title: "Neu: Brunnen", icon: "brunnen", body: "Kurze Wörter <b>senkrecht in der rechten Hälfte</b> oder <b>waagerecht in der oberen Hälfte</b> lassen einen Brunnen entstehen." },
-    first_brunnen: { level: 7, type: "brunnen", title: "Ein Brunnen!", icon: "brunnen", body: "Brunnen verdoppeln den Wert deines Zielworts." },
-    intro10: { level: 10, title: "Neu: Triebe", icon: "trieb", body: "Kurze Wörter, die eines der <b>4 Mittelfelder</b> berühren, lassen einen Trieb sprießen." },
-    first_trieb: { level: 10, type: "trieb", title: "Ein Trieb!", icon: "trieb", body: "Triebe pflanzen seltene Buchstaben. Nutze sie, wenn Lücken fehlen." }
+    protect: { any: true, minLevel: 2, title: "Zielbuchstaben sind geschützt", body: "Die hellen, lila unterstrichenen Kacheln gehören zu deinem Zielwort (je so viele, wie das Wort braucht). Sie <b>zerbröseln nie und bleiben stehen</b>, wenn darunter etwas wegfällt. Schieben bewegt sie ganz normal." }
   };
 
   /* ------------------------------------------------------------------ Anzeige */
@@ -70,10 +62,8 @@
     btn.reset.disabled = off;
     btn.hint.disabled = off || !game.target || game.ended || game.hintsUsed >= C.HINTS_PER_LEVEL;
     btn.share.disabled = off;
-    btn.whatif.disabled = off || game.ended;
     btn.menu.disabled = busy;
-    btn.preview.setAttribute("aria-pressed", String(stats.prefs.preview));
-    // Pfeile: aus, wenn Level gelöst oder die Linie nur aus Steinen besteht
+    // Pfeile: aus, wenn Level gelöst
     for (const b of document.querySelectorAll("button.arrow")) {
       b.disabled = off || game.ended || !L.canSlide(game, b.dataset.axis, Number(b.dataset.index));
     }
@@ -105,7 +95,7 @@
     startEl.levelSub.textContent = allDone
       ? `Gesamt ${total} Punkte · nochmal ab Level 1`
       : solved ? `Gesamt ${total} Punkte · ${solved}/${n} gelöst`
-      : guidedFor(1) ? "Lehr-Level · Schritt für Schritt erklärt" : `${n} Level · vom Tutorial bis zu Trieben`;
+      : guidedFor(1) ? "Lehr-Level · Schritt für Schritt erklärt" : `${n} Level · vom Tutorial bis zum letzten Garten`;
     // „Tutorial wiederholen“ erst zeigen, wenn es schon einmal lief oder übersprungen wurde
     startEl.tutorial.hidden = !(stats.tutorial.skipped || Object.keys(stats.tutorial.done).length || stats.progress.unlocked > 1);
     const today = L.formatDateKey(new Date());
@@ -136,13 +126,12 @@
   /* ------------------------------------------------------------------ Spielablauf */
 
   /**
-   * Ein Zug inkl. Vorschau und aller Animationen:
-   * Vorschau-Aufblitzen (falls an und Modifikatoren entstehen) -> Slide -> je Kaskadenstufe
-   * Zerbröseln + Fallen + Pflanzen -> ggf. Zielwort blüht auf -> Level-Abschluss.
+   * Ein Zug inkl. aller Animationen:
+   * Slide -> je Kaskadenstufe Zerbröseln + Fallen -> ggf. Zielwort blüht auf -> Level-Abschluss.
    */
   async function handleSlide(axis, index, dir) {
     if (!game || busy || game.ended || View.modalOpen || screen !== "game") return;
-    if (!L.canSlide(game, axis, index)) return; // Linie nur aus Steinen
+    if (!L.canSlide(game, axis, index)) return;
     // Lehr-Level: nur der geforderte Zug ist erlaubt, alles andere wackelt sanft
     if (!gate({ type: "slide", axis, index, dir }, document.querySelector(`button.arrow[data-axis="${axis}"][data-index="${index}"][data-dir="${dir}"]`))) return;
     busy = true;
@@ -150,23 +139,17 @@
     refreshControls();
     let result = null;
     try {
-      if (stats.prefs.preview) {
-        const p = L.previewModifiers(game, axis, index, dir);
-        if (p.placements.length) await View.previewFlash(p.placements, C.PREVIEW_MS);
-      }
       Sound.click();
       const scoreBefore = game.score;
-      const before = { cellMod: game.cellMod.slice(), sprout: game.sprout.slice() };
       result = L.performSlide(game, axis, index, dir);
-      View.updateHud(game, { score: scoreBefore, comboLevel: 0, mods: before, grid: result.gridBefore, hideOverlay: true });
-      await View.animateSlide(result.gridBefore, axis, index, dir, { cellMod: result.cellMod, sprout: result.sproutBefore });
-      View.renderBoard(result.gridAfterSlide, { cellMod: result.cellMod, sprout: result.sproutAfterSlide });
+      View.updateHud(game, { score: scoreBefore, comboLevel: 0, grid: result.gridBefore, hideOverlay: true });
+      await View.animateSlide(result.gridBefore, axis, index, dir);
+      View.renderBoard(result.gridAfterSlide, { target: game.target });
       for (const step of result.steps) {
         Sound.word(Math.max(...step.matches.map((m) => m.length)), step.level);
-        View.updateHud(game, { score: scoreBefore, comboLevel: step.level, bump: step.level >= 2, mods: { cellMod: step.cellModBefore, sprout: step.sproutBefore }, grid: step.gridBefore, hideOverlay: true });
+        View.updateHud(game, { score: scoreBefore, comboLevel: step.level, bump: step.level >= 2, grid: step.gridBefore, hideOverlay: true });
         await View.animateClear(step);
         await View.animateFall(step);
-        await View.animatePlant(step);
       }
       if (game.solved) {
         View.updateHud(game, { hideOverlay: true });
@@ -179,9 +162,7 @@
     }
     if (Coach.active) Coach.satisfy({ type: "slide", axis, index, dir }, result);
     if (game.solved) return levelComplete();
-    // Tutorial: erster Modifikator eines Typs
-    for (const step of result.steps) for (const p of step.placed) await maybeTip(`first_${p.type}`);
-    if (L.protectedCells(game.grid, game.target).size) await maybeTip("protect");
+    if (L.neededCells(game.grid, game.target).size) await maybeTip("protect");
   }
 
   /** Spielstand/Level starten und zum Spiel wechseln. */
@@ -209,11 +190,10 @@
     const tip = TIPS[key];
     if (!tip || !game || game.modeId !== "level" || stats.tips[key]) return;
     if (Coach.active || (session && session.game === game)) return; // im Lehr-Level erklärt der Coach
-    if (tip.any ? game.level.id < tip.minLevel : tip.type ? game.level.id < tip.level || !game.enabled[tip.type] : game.level.id !== tip.level) return;
+    if (tip.any ? game.level.id < tip.minLevel : game.level.id !== tip.level) return;
     stats.tips[key] = true;
     save();
-    const icon = tip.icon ? `<div class="tip-ic"><div class="tile tile-mini mod-${tip.icon}"><div class="face">${{ stein: "S", brunnen: "B", trieb: "Q" }[tip.icon]}<svg class="mod-ic" aria-hidden="true"><use href="#${{ stein: "i-stone", brunnen: "i-drop", trieb: "i-sprout" }[tip.icon]}"/></svg></div></div></div>` : "";
-    await View.modal({ title: tip.title, body: `${icon}<p>${tip.body}</p>`, actions: [{ label: "Verstanden", value: "ok", cls: "pill-mint" }] });
+    await View.modal({ title: tip.title, body: `<p>${tip.body}</p>`, actions: [{ label: "Verstanden", value: "ok", cls: "pill-mint" }] });
   }
   async function levelIntro() {
     if (!game || game.modeId !== "level") return;
@@ -314,7 +294,6 @@
     }
     save();
     const parts = [`${sol.length} × ${C.POINTS_PER_LETTER}`];
-    if (sol.brunnen) parts.push(`Brunnen ×${sol.brunnenMult}`);
     if (sol.cascades) parts.push(`Kaskade ×${View.formatMult(sol.cascadeMult)}`);
     if (sol.hintsUsed) parts.push(`− ${Math.round(sol.hintsUsed * C.HINT_PENALTY * 100)} % (Hinweise)`);
     const last = game.modeId === "level" && game.level.id >= L.LEVELS.length;
@@ -363,21 +342,6 @@
     fullRender();
     if (!h) return;
     await View.modal({ title: `Hinweis ${game.hintsUsed}/${C.HINTS_PER_LEVEL}`, body: `<p>${View.esc(h.text)}</p>`, actions: [{ label: "Danke", value: "ok", cls: "pill-mint" }] });
-  }
-
-  /** „Was passiert, wenn?“ – alle Züge, die jetzt Modifikatoren erzeugen würden. */
-  async function showWhatIf() {
-    if (!game || busy || View.modalOpen || game.ended) return;
-    const list = L.whatIf(game);
-    const dirName = (m) => (m.axis === "row" ? (m.dir > 0 ? "→" : "←") : (m.dir > 0 ? "↓" : "↑"));
-    const cellName = (i) => `${"ABCDEF"[L.colOf(i)]}${L.rowOf(i) + 1}`;
-    const items = list.map((m) => `<li><span class="mv">${m.axis === "row" ? "Zeile" : "Spalte"} ${m.index + 1} ${dirName(m)}</span>` +
-      m.placements.map((p) => `<svg aria-hidden="true"><use href="#${{ stein: "i-stone", brunnen: "i-drop", trieb: "i-sprout" }[p.type]}"/></svg>${NAMES[p.type]} auf ${cellName(p.cell)} <small>(${View.esc(p.word)})</small>`).join(" ") + "</li>").join("");
-    await View.modal({
-      title: "Was passiert, wenn …?",
-      body: list.length ? `<p>Diese Züge pflanzen gerade Modifikatoren (Spalten A–F, Zeilen 1–6):</p><ul class="whatif">${items}</ul>` : "<p>Im Moment erzeugt kein einzelner Zug einen Modifikator. Bilde ein kurzes Wort (3–5 Buchstaben)!</p>",
-      actions: [{ label: "OK", value: "ok", cls: "pill-mint" }]
-    });
   }
 
   /** Bestätigung im In-Game-Dialog. Liefert Promise<boolean>. */
@@ -436,17 +400,9 @@
         <ul class="howto">
           <li><b>Zielwort:</b> Jedes Level versteckt ein Wort – du siehst nur Hinweis und Länge. Bilde es waagerecht oder senkrecht am Stück.</li>
           <li><b>Schieben:</b> Wische eine Zeile oder Spalte (oder tippe die Pfeile) – sie rückt um ein Feld, was rausfällt, kommt gegenüber wieder rein.</li>
-          <li><b>Kurze Wörter (${C.SHORT_MIN}–${C.SHORT_MAX}):</b> zerbröseln, geben keine Punkte, pflanzen aber Modifikatoren:</li>
-        </ul>
-        <ul class="howto mods">
-          <li><svg aria-hidden="true"><use href="#i-sprout"/></svg><span><b>Trieb</b> – Wort berührt die 4 Mittelfelder: ein Feld daneben bekommt einen seltenen Buchstaben (Q, X, Y, J).</span></li>
-          <li><svg aria-hidden="true"><use href="#i-stone"/></svg><span><b>Stein</b> – waagerecht unten oder senkrecht links: das Feld rechts/unter dem Wort wird fest. Slides laufen um Steine herum.</span></li>
-          <li><svg aria-hidden="true"><use href="#i-drop"/></svg><span><b>Brunnen</b> – senkrecht rechts oder waagerecht oben: läuft das Zielwort hindurch, zählt es ×${C.BRUNNEN_FACTOR} (mehrere: ×4, ×8).</span></li>
-        </ul>
-        <ul class="howto">
-          <li><b>Fortschritt geschützt:</b> Mindestens zwei richtige Zielwort-Buchstaben am Stück sind zart lila unterstrichen – kurze Wörter, die sie benutzen, zerbröseln nicht.</li>
-          <li><b>Vorschau:</b> Felder, die beim nächsten Zug zu Modifikatoren würden, blitzen vorher gelb auf. „Was passiert?“ listet alle solchen Züge.</li>
-          <li><b>Punkte:</b> Länge × ${C.POINTS_PER_LETTER} × Brunnen × Kaskade. ${C.HINTS_PER_LEVEL} Hinweise pro Level, je −${pct} %.</li>
+          <li><b>Kurze Wörter (${C.SHORT_MIN}–${C.SHORT_MAX}):</b> zerbröseln, geben keine Punkte; von oben fällt Neues nach. Das kann Kaskaden auslösen.</li>
+          <li><b>Zielbuchstaben geschützt:</b> Die hellen, lila unterstrichenen Kacheln gehören zum Zielwort (bei Doppelbuchstaben nur so viele, wie das Wort braucht). Sie zerbröseln nie und bleiben stehen, wenn darunter etwas wegfällt. Schieben bewegt sie ganz normal.</li>
+          <li><b>Punkte:</b> Länge × ${C.POINTS_PER_LETTER} × Kaskade. ${C.HINTS_PER_LEVEL} Hinweise pro Level, je −${pct} %.</li>
         </ul>`,
       actions: [{ label: "Tutorial wiederholen", value: "tutorial", cls: "pill-cream", icon: "i-bulb" }, { label: "Los geht's", value: "ok", cls: "pill-mint" }]
     }).then((v) => { if (v === "tutorial") replayTutorial(); });
@@ -461,7 +417,6 @@
   }
 
   const toggleMute = () => { Sound.setEnabled(!Sound.enabled); if (Sound.enabled) Sound.unlock(); refreshControls(); };
-  const togglePreview = () => { stats.prefs.preview = !stats.prefs.preview; save(); refreshControls(); };
 
   /* ------------------------------------------------------------------ Verdrahtung */
   Sound.loadPreference();
@@ -485,8 +440,6 @@
     onReset: tapped("reset", () => { if (!game || busy || View.modalOpen) return; Particles.clear(); L.reset(game); fullRender(); View.introBoard(); }),
     onShare: tapped("share", () => { if (game && !busy && !View.modalOpen) return shareText(L.buildShareText(game)); }),
     onHint: tapped("hint", showHint),
-    onWhatIf: tapped("whatif", showWhatIf),
-    onTogglePreview: tapped("preview", togglePreview),
     onToggleMute: toggleMute,
     onSelect: (r, c) => { if (!game) return; View.selection = { r, c }; View.renderBoard(game.grid, game); },
     isBusy: () => busy || View.modalOpen || screen !== "game" || !game
@@ -520,6 +473,6 @@
     get stats() { return stats; },
     get session() { return session; },
     Coach,
-    handleSlide, startLevel, startDaily, startFree, goToMenu, nextLevel, showHint, showWhatIf, replayTutorial
+    handleSlide, startLevel, startDaily, startFree, goToMenu, nextLevel, showHint, replayTutorial
   };
 })(typeof globalThis !== "undefined" ? globalThis : this);

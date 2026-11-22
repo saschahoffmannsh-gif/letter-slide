@@ -109,3 +109,22 @@ test("Tutorial-Stand: geführte Level und Überspringen werden gespeichert", () 
   const bad = memoryStorage({ [S.STORAGE_KEY]: JSON.stringify({ tutorial: { done: { x: 1, 3: true }, skipped: "ja" } }) });
   assert.deepEqual(S.loadStats(bad).tutorial, { done: { 3: true }, skipped: false });
 });
+
+test("alter Spielstand (wortgartenStats.v1) mit Modifikator-Tipps und Vorschau-Flag lädt ohne Fehler", () => {
+  const raw = JSON.stringify({
+    daily: { "2026-11-20": { puzzleNumber: 324, score: 50, moves: 4, maxCombo: 1, shareText: "Wortgarten Level 4 · 50 Punkte · 4 Züge" } },
+    endlessBest: 0,
+    progress: { unlocked: 5, best: { 1: 60, 2: 40, 4: 50 } },
+    tips: { intro1: true, first_stein: true, intro4: true, first_brunnen: true, intro7: true, first_trieb: true },
+    prefs: { preview: false },
+    tutorial: { done: { 1: true, 2: true, 4: true }, skipped: false }
+  });
+  const back = S.loadStats(memoryStorage({ [S.STORAGE_KEY]: raw }));
+  assert.equal(back.progress.unlocked, 5);
+  assert.equal(back.progress.best[4], 50);
+  assert.equal(back.tips.first_stein, true);
+  assert.equal(back.tips.intro4, true);
+  assert.equal(back.prefs.preview, false);
+  assert.equal(back.tutorial.done[4], true);
+  assert.equal(S.dailyResult(back, "2026-11-20").score, 50);
+});

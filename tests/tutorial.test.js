@@ -7,17 +7,16 @@ const L = require("../src/logic.js");
 const Tut = require("../src/tutorial.js");
 const T = require("../tools/level-tools.js");
 
-const ANCHOR = /^(target|hint-text|slots|score|board|center|letters|protected|btn:(hint|preview|whatif)|mod:(stein|brunnen|trieb)|arrow:[RC][1-6][+-]|row:[0-5]|col:[0-5]|tile:[0-5],[0-5])$/;
-const FEATURE = { 4: "stein", 7: "brunnen", 10: "trieb" };
+const ANCHOR = /^(target|hint-text|slots|score|board|center|letters|protected|btn:hint|arrow:[RC][1-6][+-]|row:[0-5]|col:[0-5]|tile:[0-5],[0-5])$/;
 
-test("Lehr-Level 1, 2, 3, 4, 7, 10 haben ein Skript; Anker und Züge sind gültig", () => {
-  assert.deepEqual(Tut.levelIds(), [1, 2, 3, 4, 7, 10]);
+test("Lehr-Level 1, 2, 3 haben ein Skript; Anker und Züge sind gültig", () => {
+  assert.deepEqual(Tut.levelIds(), [1, 2, 3]);
   for (const id of Tut.levelIds()) {
     const s = Tut.scriptFor(id);
     for (const step of [...s.steps, ...(s.afterSolve || [])]) {
       assert.match(step.anchor, ANCHOR, `Level ${id}: Anker ${step.anchor}`);
       for (const f of step.focus || []) assert.match(f, ANCHOR);
-      assert.ok(step.text && step.text.length < 260, "kurzer Text");
+      assert.ok(step.text && step.text.length < 280, "kurzer Text");
       if (step.move) assert.equal(step.anchor, "arrow:" + step.move, "Zug-Schritt zeigt auf seinen Pfeil");
       assert.ok(!(step.move && step.tap));
     }
@@ -35,11 +34,13 @@ test("jedes Skript läuft stimmig durch (alle Bedingungen erfüllt)", () => {
   for (const id of Tut.levelIds()) assert.deepEqual(Tut.replay(L, id).problems, [], `Level ${id}`);
 });
 
-test("Level 1: Skript löst WAERME mit 1 Zug, 60 Punkte", () => {
+test("Level 1: Skript löst WAERME mit 1 Zug, 60 Punkte; Score-Text ohne Brunnen", () => {
   const { state } = Tut.replay(L, 1);
   assert.equal(state.solved.word, "WAERME");
   assert.equal(state.moves, 1);
   assert.equal(state.levelPoints, 60);
+  const scoreStep = Tut.scriptFor(1).afterSolve.find((s) => s.anchor === "score");
+  assert.ok(scoreStep && !/Brunnen|Stein|Trieb/i.test(scoreStep.text));
 });
 
 test("Level 2: Skript führt jeden Zug der Referenzlösung bis zum senkrechten MOND", () => {
@@ -49,12 +50,16 @@ test("Level 2: Skript führt jeden Zug der Referenzlösung bis zum senkrechten M
   assert.equal(state.moves, L.levelById(2).solution.length);
 });
 
-test("Level 2: erster Zug lässt kurze Wörter zerbröseln, danach ist Fortschritt geschützt", () => {
+test("Level 2: erster Zug lässt kurze Wörter zerbröseln; Zielbuchstaben bleiben, Text erklärt den Schutz", () => {
   const st = L.loadLevel(2);
+  const before = L.neededCells(st.grid, st.target);
+  assert.equal(before.size, st.target.length);
   const mv = Tut.decodeMove(Tut.scriptedMoves(2)[0]);
   const r = L.performSlide(st, mv.axis, mv.index, mv.dir);
   assert.ok(Tut.wordsOf(r).length >= 1);
-  assert.ok(L.protectedCells(st.grid, st.target).size >= 2);
+  assert.ok(L.neededCells(st.grid, st.target).size >= st.target.length);
+  const prot = Tut.scriptFor(2).steps.find((s) => s.anchor === "protected");
+  assert.match(prot.text, /zerbröseln nie und bleiben stehen/);
 });
 
 test("Level 3: 1–2 Schubser, dann freies Spiel – Rest der Referenzlösung löst", () => {
@@ -64,29 +69,6 @@ test("Level 3: 1–2 Schubser, dann freies Spiel – Rest der Referenzlösung l�
   assert.ok(!state.solved);
   const rest = T.replay(L.levelById(3), L.levelById(3).solution.slice(moves.length), state);
   assert.ok(rest.state.solved, "nach den Schubsern noch lösbar");
-});
-
-for (const [id, type] of Object.entries(FEATURE)) {
-  test(`Level ${id}: geführter Zug erzeugt den ersten ${type}, Level bleibt lösbar`, () => {
-    const { state } = Tut.replay(L, Number(id));
-    assert.ok(state.created[type] >= 1, `${type} entstanden`);
-    assert.ok(!state.solved);
-    const lv = L.levelById(Number(id));
-    const rest = T.replay(lv, lv.solution.slice(Tut.scriptedMoves(Number(id)).length), state);
-    assert.ok(rest.state.solved, "Rest der Referenzlösung löst");
-  });
-}
-
-test("Level 4: Skript zeigt Vorschau-Auge und verlangt „Was passiert?“", () => {
-  const steps = Tut.scriptFor(4).steps;
-  assert.ok(steps.some((s) => s.anchor === "btn:preview"));
-  assert.ok(steps.some((s) => s.tap === "whatif"));
-  // Vorschau sagt den Stein vor dem Zug voraus (gleiche Regel wie das Spiel)
-  const st = L.loadLevel(4);
-  const [m1, m2] = Tut.scriptedMoves(4).map(Tut.decodeMove);
-  L.performSlide(st, m1.axis, m1.index, m1.dir);
-  const pv = L.previewModifiers(st, m2.axis, m2.index, m2.dir);
-  assert.ok(pv.placements.some((p) => p.type === "stein"));
 });
 
 test("{words} wird durch die kurzen Wörter des letzten Zugs ersetzt", () => {

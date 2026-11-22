@@ -3,7 +3,7 @@
  * =====================================================
  * Baut Kandidaten-Grids für vorgegebene Zielwörter/Hinweise: Zielwort in ein Zufallsbrett setzen,
  * mit zufälligen Rück-Zügen verwürfeln, dann mit dem Löser (echte Spielregeln) prüfen, dass
- * die Bedingungen des Levels erfüllt sind (Lösungslänge, Modifikator wird benutzt …).
+ * die Bedingungen des Levels erfüllt sind (Lösungslänge).
  * Ausgabe: JSON der gefundenen Level -> von Hand geprüft und in src/levels.js übernommen.
  *   node tools/generate-levels.js 4      # nur Level 4
  */
@@ -12,18 +12,18 @@ const T = require("./level-tools.js");
 const L = T.L;
 
 const SPECS = [
-  { id: 1, hint: "etwas Warmes", target: "WAERME", mods: {}, kind: "rotate" },
-  { id: 2, hint: "leuchtet in der Nacht", target: "MOND", mods: {}, kind: "exact", scramble: [3, 4], min: [3, 4] },
-  { id: 3, hint: "ein Tier", target: "KATZE", mods: {}, kind: "exact", scramble: [6, 7], min: [6, 8], touch: true, tries: 60 },
-  { id: 4, hint: "wächst im Garten", target: "BLUME", mods: { stein: true }, feature: "stein", scramble: [4, 5], len: [4, 7] },
-  { id: 5, hint: "macht den Garten nass", target: "REGEN", mods: { stein: true }, feature: "stein", scramble: [5, 6], len: [5, 7] },
-  { id: 6, hint: "hat Wurzeln und Blätter", target: "BAUM", mods: { stein: true }, feature: "stein", scramble: [5, 6], len: [5, 8] },
-  { id: 7, hint: "ein Getränk", target: "WASSER", mods: { stein: true, brunnen: true }, feature: "brunnen", scramble: [4, 5], len: [4, 8] },
-  { id: 8, hint: "scheint am Himmel", target: "SONNE", mods: { stein: true, brunnen: true }, feature: "brunnen", scramble: [5, 6], len: [5, 8] },
-  { id: 9, hint: "ein Getränk am Morgen", target: "KAFFEE", mods: { stein: true, brunnen: true }, feature: "brunnen", scramble: [5, 7], len: [5, 9] },
-  { id: 10, hint: "ein Ort voller Pflanzen", target: "GARTEN", mods: { stein: true, brunnen: true, trieb: true }, feature: "trieb", scramble: [5, 6], len: [5, 9] },
-  { id: 11, hint: "ein schlaues Tier", target: "FUCHS", mods: { stein: true, brunnen: true, trieb: true }, feature: "trieb", scramble: [6, 7], len: [6, 10] },
-  { id: 12, hint: "eine Jahreszeit", target: "WINTER", mods: { stein: true, brunnen: true, trieb: true }, feature: "trieb", scramble: [6, 8], len: [6, 10] }
+  { id: 1, hint: "etwas Warmes", target: "WAERME", kind: "rotate" },
+  { id: 2, hint: "leuchtet in der Nacht", target: "MOND", kind: "exact", scramble: [3, 4], min: [3, 4] },
+  { id: 3, hint: "ein Tier", target: "KATZE", kind: "exact", scramble: [6, 7], min: [6, 8], touch: true, tries: 60 },
+  { id: 4, hint: "wächst im Garten", target: "BLUME", scramble: [4, 5], len: [4, 7] },
+  { id: 5, hint: "macht den Garten nass", target: "REGEN", scramble: [5, 6], len: [5, 7] },
+  { id: 6, hint: "hat Wurzeln und Blätter", target: "BAUM", scramble: [5, 6], len: [5, 8] },
+  { id: 7, hint: "ein Getränk", target: "WASSER", scramble: [4, 5], len: [4, 8] },
+  { id: 8, hint: "scheint am Himmel", target: "SONNE", scramble: [5, 6], len: [5, 8] },
+  { id: 9, hint: "ein Getränk am Morgen", target: "KAFFEE", scramble: [5, 7], len: [5, 9] },
+  { id: 10, hint: "ein Ort voller Pflanzen", target: "GARTEN", scramble: [5, 6], len: [5, 9] },
+  { id: 11, hint: "ein schlaues Tier", target: "FUCHS", scramble: [6, 7], len: [6, 10] },
+  { id: 12, hint: "eine Jahreszeit", target: "WINTER", scramble: [6, 8], len: [6, 10] }
 ];
 
 const rng = L.createRng(Number(process.env.SEED || 20261122));
@@ -67,8 +67,7 @@ function scrambleTouching(g, k, targetCells) {
   }
   return { g, moves };
 }
-const mk = (spec, g) => ({ id: spec.id, hint: spec.hint, length: spec.target.length, target: spec.target, grid: toRows(g),
-  modifiersEnabled: { stein: !!spec.mods.stein, brunnen: !!spec.mods.brunnen, trieb: !!spec.mods.trieb } });
+const mk = (spec, g) => ({ id: spec.id, hint: spec.hint, length: spec.target.length, target: spec.target, grid: toRows(g) });
 
 function attempt(spec) {
   const t = spec.target;
@@ -97,13 +96,10 @@ function attempt(spec) {
       : lo - 1 >= 5 ? T.beamSolve(lv, { maxDepth: hi, beam: 4000 }) : T.minSolution(lv, hi);
     return sol && sol.depth >= lo && sol.depth <= hi ? { level: lv, solution: sol.moves, minimal: `>= ${lo}` } : null;
   }
-  // Modifikator-Level: Lösung muss den neuen Modifikator benutzen (bei Brunnen: Zielwort über einen Brunnen)
-  if (T.minSolution(lv, 2)) return null;                       // nicht trivial
-  const f = spec.feature;
-  const cond = f === "brunnen" ? (s) => s.solved.brunnen > 0 : (s) => s.created[f] > 0;
-  const bonus = f === "brunnen" ? (s) => s.created.brunnen * 1.5 : (s) => (s.created[f] > 0 ? 2 : 0);
-  const sol = T.beamSolve(lv, { maxDepth: spec.len[1], beam: 1200, cond, bonus });
-  return sol && sol.depth >= spec.len[0] ? { level: lv, solution: sol.moves, features: sol.state.created, brunnenInPath: sol.state.solved.brunnen } : null;
+  // spätere Level: nicht trivial, Lösung in der gewünschten Zugspanne
+  if (T.minSolution(lv, 2)) return null;
+  const sol = T.beamSolve(lv, { maxDepth: spec.len[1], beam: 1500 });
+  return sol && sol.depth >= spec.len[0] ? { level: lv, solution: sol.moves } : null;
 }
 
 const only = process.argv[2] ? Number(process.argv[2]) : null;

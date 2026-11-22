@@ -218,7 +218,7 @@
       const w = rect.width, faceH = rect.height, h = faceH + EDGE_PX;
       const t0 = clock + order * STAGGER_S;
       const tileId = tiles.length;
-      // Farben pro Kachel (Modifikator-Kacheln: Stein grau, Brunnen blau, Trieb grün) aus den CSS-Variablen
+      // Farben pro Kachel aus den CSS-Variablen der Fläche (--c/--s/--d, color)
       const pv = (n, d) => cs.getPropertyValue(n).trim() || d;
       const col = { face: pv("--c", theme.face), shade: pv("--s", theme.shade), edge: pv("--d", theme.edge), ink: cs.color || theme.ink };
       const tid = { ...ids, face: colorId(col.face), shade: colorId(col.shade), edge: colorId(col.edge), ink: colorId(col.ink) };

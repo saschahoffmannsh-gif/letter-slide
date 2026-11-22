@@ -7,7 +7,6 @@
  *   length           Länge des Zielworts
  *   target           Zielwort, nur A–Z (Umlaute ausschreiben: WÄRME -> WAERME)
  *   grid             6 Zeilen à 6 Buchstaben (Zeile 1 = oben)
- *   modifiersEnabled { stein, brunnen, trieb } – welche Modifikatoren in diesem Level entstehen
  *   solution         Referenzlösung (nur für Tests): "R1-" = Zeile 1 nach links, "C3+" = Spalte 3 nach unten
  *
  * Regeln für ein gutes Level (prüft tests/levels.test.js automatisch):
@@ -16,8 +15,7 @@
  *   - Die Referenzlösung löst das Level unter den echten Spielregeln (inkl. Kaskaden).
  * Neues Level prüfen/lösen lassen: node tools/solve-level.js <id>
  *
- * Progression (Spec): 1–3 nur Zielwort (1 / 3 / 6 Züge), 4–6 Stein, 7–9 Stein + Brunnen,
- * 10–12 alle drei. Die Referenzlösungen ab Level 4 benutzen den jeweils neuen Modifikator.
+ * Progression: Level 1 genau 1 Zug, Level 2 etwa 3–4 Züge, danach steigende Schwierigkeit.
  */
 (function (root) {
   "use strict";
@@ -34,7 +32,6 @@
         ["A", "S", "C", "I", "S", "H"],
         ["B", "R", "B", "K", "I", "R"]
       ],
-      modifiersEnabled: { stein: false, brunnen: false, trieb: false },
       solution: ["R1-"]
     },
     // Level 2 – Tutorial: Zielwort auf zwei Reihen verteilt – mindestens 3 Slides
@@ -43,12 +40,11 @@
       grid: [
         ["E", "E", "H", "S", "M", "S"],
         ["A", "I", "B", "I", "E", "O"],
-        ["C", "E", "S", "S", "G", "E"],
+        ["C", "E", "S", "S", "T", "E"],
         ["N", "Z", "L", "O", "C", "D"],
         ["U", "O", "K", "E", "G", "E"],
         ["E", "L", "R", "L", "H", "L"]
       ],
-      modifiersEnabled: { stein: false, brunnen: false, trieb: false },
       solution: ["R1+", "C1-", "R3-"]
     },
     // Level 3 – Tutorial: Zielwort zerstreut – mindestens 6 Slides
@@ -62,10 +58,9 @@
         ["D", "T", "D", "D", "B", "H"],
         ["D", "U", "T", "Z", "O", "S"]
       ],
-      modifiersEnabled: { stein: false, brunnen: false, trieb: false },
       solution: ["R5+", "R4+", "R6-", "R1-", "C3-", "R2-"]
     },
-    // Level 4 – Stein einführen
+    // Level 4
     {
       id: 4, hint: "wächst im Garten", length: 5, target: "BLUME",
       grid: [
@@ -76,7 +71,6 @@
         ["E", "I", "E", "E", "R", "M"],
         ["S", "C", "U", "N", "L", "K"]
       ],
-      modifiersEnabled: { stein: true, brunnen: false, trieb: false },
       solution: ["C1+", "R2-", "R5+", "R2-"]
     },
     // Level 5
@@ -90,7 +84,6 @@
         ["S", "E", "N", "O", "P", "E"],
         ["N", "S", "R", "G", "T", "U"]
       ],
-      modifiersEnabled: { stein: true, brunnen: false, trieb: false },
       solution: ["R1-", "C3+", "R1-", "R2-", "C4+"]
     },
     // Level 6
@@ -104,10 +97,9 @@
         ["N", "S", "D", "N", "F", "O"],
         ["U", "R", "L", "I", "H", "U"]
       ],
-      modifiersEnabled: { stein: true, brunnen: false, trieb: false },
       solution: ["C6-", "R1-", "R6+", "C2-", "R4+"]
     },
-    // Level 7 – Brunnen einführen
+    // Level 7
     {
       id: 7, hint: "ein Getränk", length: 6, target: "WASSER",
       grid: [
@@ -118,7 +110,6 @@
         ["K", "I", "F", "Z", "E", "L"],
         ["T", "K", "T", "P", "L", "R"]
       ],
-      modifiersEnabled: { stein: true, brunnen: true, trieb: false },
       solution: ["C2-", "R1-", "R5+", "R3+"]
     },
     // Level 8
@@ -132,8 +123,7 @@
         ["I", "P", "G", "T", "C", "Z"],
         ["O", "S", "A", "N", "E", "B"]
       ],
-      modifiersEnabled: { stein: true, brunnen: true, trieb: false },
-      solution: ["R3+", "R2+", "C2+", "C6+", "R1-", "C5+"]
+      solution: ["C4+", "R1-", "C5+"]
     },
     // Level 9
     {
@@ -146,10 +136,9 @@
         ["B", "R", "D", "G", "R", "H"],
         ["R", "I", "K", "U", "U", "K"]
       ],
-      modifiersEnabled: { stein: true, brunnen: true, trieb: false },
-      solution: ["C5+", "C3-", "R4-", "R2-", "C3-", "R5-", "C4-"]
+      solution: ["C1-", "R3-", "C3-"]
     },
-    // Level 10 – Trieb einführen
+    // Level 10
     {
       id: 10, hint: "ein Ort voller Pflanzen", length: 6, target: "GARTEN",
       grid: [
@@ -160,7 +149,6 @@
         ["H", "B", "R", "C", "K", "T"],
         ["R", "D", "G", "B", "E", "R"]
       ],
-      modifiersEnabled: { stein: true, brunnen: true, trieb: true },
       solution: ["R4+", "R6+", "C5+", "C6-", "R2+"]
     },
     // Level 11
@@ -174,7 +162,6 @@
         ["K", "E", "E", "E", "C", "R"],
         ["D", "D", "S", "H", "R", "G"]
       ],
-      modifiersEnabled: { stein: true, brunnen: true, trieb: true },
       solution: ["C2-", "R4+", "R6+", "C5-", "R6+", "R2+"]
     },
     // Level 12
@@ -188,8 +175,7 @@
         ["E", "I", "W", "F", "N", "A"],
         ["N", "R", "I", "T", "T", "Z"]
       ],
-      modifiersEnabled: { stein: true, brunnen: true, trieb: true },
-      solution: ["R2-", "R3-", "C3+", "R5+", "R5+", "R2-"]
+      solution: ["R4-", "C3+", "R6+", "C1-"]
     }
   ];
 

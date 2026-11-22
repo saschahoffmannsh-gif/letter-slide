@@ -34,12 +34,6 @@
   --hit: #FFCF3A; --hit-deep: #F0A818; --hit-glow: rgba(255, 196, 40, .75); /* Treffer-Gold */
   --select: #8B6FD0;
 
-  /* --- Modifikatoren: gleiche Kachelform, sanfte Pastell-Tönung (auch für die Körner beim Zerbröseln) --- */
-  --stein-face: #EEEBE7;   --stein-shade: #DFD9D2;   --stein-edge: #BDB4AA;   --stein-ink: #5C554E;   --stein-rim: #CBC3BA;
-  --brunnen-face: #B9DDF6; --brunnen-shade: #A2CFF0; --brunnen-edge: #7FB3DD; --brunnen-ink: #FFFFFF; --brunnen-ink-edge: #5D95C6;
-  --trieb-face: #DDF2CF;   --trieb-shade: #C8E8B4;   --trieb-edge: #9DCB86;   --trieb-ink: #3D6A2E;
-  --preview: #FFE27A;      --preview-glow: rgba(255, 205, 60, .85);  /* gelbes Aufblitzen der Vorschau */
-
   /* --- Pillen / Buttons --- */
   --mint: #BFE6D3;  --mint-deep: #8FCBAE;
   --peach: #FCCDB4; --peach-deep: #EBA585;
@@ -272,9 +266,10 @@ button.arrow:active:not(:disabled) .arrow-key { transform: translateY(2px); box-
 /* Jede Kachel ist exakt eine Zelle groß -> translate(100%) = genau ein Feld */
 .tile { position: absolute; width: calc(100% / 6); height: calc(100% / 6); padding: 3px 3px 6px; will-change: transform; }
 .tile .face {
-  --c: var(--tile-face); --d: var(--tile-edge);
+  --c: var(--tile-face); --s: var(--tile-shade); --d: var(--tile-edge);
   width: 100%; height: 100%; border-radius: 13px; color: var(--tile-ink);
-  background: linear-gradient(var(--c) 55%, var(--tile-shade));
+  background: linear-gradient(var(--c) 55%, var(--s));
+  position: relative;
   display: flex; align-items: center; justify-content: center;
   font-weight: 900; font-size: calc(var(--board) / 6 * .52); line-height: 1;
   box-shadow: 0 0 0 1px rgba(74,52,38,.05), inset 0 -2px 0 rgba(74,52,38,.03), 0 4px 0 var(--d), 0 5px 8px var(--shadow);
@@ -284,7 +279,7 @@ button.arrow:active:not(:disabled) .arrow-key { transform: translateY(2px); box-
 .tile.sel-line .face { --c: var(--tile-sel-line); }
 .tile.sel .face { outline: 3px solid var(--select); outline-offset: -3px; }
 /* Treffer: golden aufleuchten, dann weich ausblenden */
-.tile.tile.hit .face { /* doppelte Klasse: schlägt auch die Modifikator-Tönung */
+.tile.tile.hit .face {
   --c: var(--hit); --d: var(--hit-deep);
   background: radial-gradient(circle at 50% 35%, #FFF2B0 0%, var(--hit) 60%);
   box-shadow: inset 0 2px 0 rgba(255,255,255,.7), 0 4px 0 var(--d), 0 0 9px 2px var(--hit-glow);
@@ -415,76 +410,18 @@ button.arrow:active:not(:disabled) .arrow-key { transform: translateY(2px); box-
 .target-card.free .target-slots { display: none; }
 .hint-line { font-size: .74rem; color: var(--ink-soft); text-align: center; line-height: 1.25; max-width: 100%; }
 
-/* ------------------------------------------------------------------ Wortgarten: Modifikator-Status (im Zielwort-Feld) */
-.modstatus {
-  display: flex; align-items: center; justify-content: center; gap: 5px; min-height: 24px; padding: 2px 10px;
-  border-radius: 999px; font-size: .76rem; color: var(--ink); white-space: nowrap; background: rgba(255,255,255,.7);
-}
-.mod-chip { display: inline-flex; align-items: center; gap: 3px; }
-.mod-chip svg { width: 16px; height: 16px; flex: none; }
-.mod-chip b { font-weight: 900; }
-.mod-chip.off { opacity: .4; }
-.modstatus .sep { font-style: normal; color: var(--card-edge); font-weight: 900; }
-.controls .pill.toggle { flex: 0 0 auto; padding: 8px 14px; }
-.pill.toggle[aria-pressed="true"] { --c: var(--butter); --d: var(--hit-deep); }
-.pill.toggle[aria-pressed="false"] svg { opacity: .45; }
 .controls .pill .count {
   display: inline-flex; align-items: center; justify-content: center; min-width: 1.4em; height: 1.4em; margin-left: 2px;
   border-radius: 999px; background: rgba(255,255,255,.7); font-size: .85em;
 }
 
-/* ------------------------------------------------------------------ Wortgarten: Modifikator-Kacheln */
-/* Gleiche weiße Kachelform; nur Farbe/Muster/Icon unterscheiden sich. --c/--s/--d/color liest auch particles.js. */
-.tile .face { --s: var(--tile-shade); background: linear-gradient(var(--c) 55%, var(--s)); position: relative; }
-.mod-ic { position: absolute; top: 7%; right: 7%; width: 30%; height: 30%; pointer-events: none; filter: drop-shadow(0 1px 0 rgba(255,255,255,.7)); }
-.tile.mod-stein .face {
-  --c: var(--stein-face); --s: var(--stein-shade); --d: var(--stein-edge); color: var(--stein-ink);
-  box-shadow: inset 0 0 0 3px var(--stein-rim), inset 0 -2px 0 rgba(74,52,38,.05), 0 4px 0 var(--d), 0 5px 8px var(--shadow);
-}
-/* Brunnen: Wellenmuster (Inline-SVG als Data-URI) über dem Blau, weißer Buchstabe mit blauer Kante */
-.tile.mod-brunnen .face {
-  --c: var(--brunnen-face); --s: var(--brunnen-shade); --d: var(--brunnen-edge); color: var(--brunnen-ink);
-  background:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='12' viewBox='0 0 24 12'%3E%3Cpath d='M0 8c3-3 6-3 9 0s6 3 9 0 6-3 6-3' fill='none' stroke='%23FFFFFF' stroke-opacity='.55' stroke-width='1.6'/%3E%3C/svg%3E") 0 100% / 50% auto repeat-x,
-    linear-gradient(var(--c) 55%, var(--s));
-  -webkit-text-stroke: 1.5px var(--brunnen-ink-edge); paint-order: stroke fill;
-  text-shadow: 0 2px 0 var(--brunnen-ink-edge);
-}
-/* Trieb: Sprossen-Muster, dunkelgrüner Buchstabe */
-.tile.mod-trieb .face {
-  --c: var(--trieb-face); --s: var(--trieb-shade); --d: var(--trieb-edge); color: var(--trieb-ink);
-  background:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cg fill='none' stroke='%2388BE6E' stroke-opacity='.45' stroke-width='1.2' stroke-linecap='round'%3E%3Cpath d='M4 14v-4M4 10c0-2-1.5-3-3-3M4 10c0-2 1.5-3 3-3'/%3E%3Cpath d='M12 7V3M12 3c0-1.5-1-2-2-2M12 3c0-1.5 1-2 2-2'/%3E%3C/g%3E%3C/svg%3E") 0 0 / 45% auto repeat,
-    linear-gradient(var(--c) 55%, var(--s));
-}
-/* Steine liegen über rutschenden Kacheln (die gleiten „unter“ dem Stein durch) */
-.tile.mod-stein { z-index: 2; }
-/* Zielwort-Fortschritt (geschützt): zarter Lavendel-Schimmer wie die Auswahl + feiner Unterstrich */
+/* benötigte Zielbuchstaben: zarter Lavendel-Schimmer + feiner Unterstrich */
 .tile.protected .face::after {
   content: ""; position: absolute; left: 24%; right: 24%; bottom: 8%; height: 3px; border-radius: 2px;
   background: var(--lavender-deep); opacity: .7; pointer-events: none;
 }
-.tile.protected:not([class*="mod-"]) .face { --c: var(--tile-sel-line);
+.tile.protected .face { --c: var(--tile-sel-line);
   box-shadow: inset 0 0 0 2px rgba(175,155,224,.35), inset 0 -2px 0 rgba(74,52,38,.05), 0 4px 0 var(--d), 0 5px 8px var(--shadow); }
-
-/* Frisch gepflanzt: kurzer Plopp */
-.tile.planted .face { animation: plant-pop .5s cubic-bezier(.3,1.7,.5,1); }
-@keyframes plant-pop { 0% { transform: scale(.55); } 60% { transform: scale(1.12); } 100% { transform: scale(1); } }
-
-/* Vorschau: Zielfelder blitzen gelb (PREVIEW_MS), Geister-Icon zeigt den Typ */
-.tile.preview .face { animation: preview-flash .8s ease-in-out; }
-.tile.preview .preview-ic { position: absolute; inset: 22%; width: 56%; height: 56%; opacity: .9; animation: preview-ic .8s ease-in-out; pointer-events: none; }
-@keyframes preview-flash {
-  0%, 100% { box-shadow: 0 0 0 1px rgba(74,52,38,.05), 0 4px 0 var(--d), 0 5px 8px var(--shadow); }
-  12%, 78% { background: radial-gradient(circle at 50% 35%, #FFF6C8 0%, var(--preview) 65%); }
-  12%, 45%, 78% { box-shadow: 0 0 0 3px var(--hit-deep), 0 4px 0 var(--hit-deep), 0 0 12px 3px var(--preview-glow); }
-  30%, 62% { background: radial-gradient(circle at 50% 35%, #FFF6C8 0%, var(--preview) 65%); box-shadow: 0 0 0 2px var(--hit), 0 4px 0 var(--d), 0 0 6px 1px var(--preview-glow); }
-}
-@keyframes preview-ic { 0% { transform: scale(.4); opacity: 0; } 25% { transform: scale(1.1); opacity: 1; } 85% { opacity: 1; } 100% { opacity: 0; } }
-/* Typ erkennt man am Geister-Icon (Stein / Tropfen / Blatt) in der Typ-Farbe */
-.tile.preview.p-stein .preview-ic { color: var(--stein-edge); }
-.tile.preview.p-brunnen .preview-ic { color: var(--brunnen-edge); }
-.tile.preview.p-trieb .preview-ic { color: var(--trieb-ink); }
 
 /* Zielwort blüht auf: Buchstaben in Pastellfarben, Farb-Bloom über das ganze Brett */
 .tile.bloom .face {
@@ -508,16 +445,6 @@ button.arrow:active:not(:disabled) .arrow-key { transform: translateY(2px); box-
 
 /* Gelöst-Zusammenfassung im Dialog */
 #modal-body .formula { font-size: .82rem; color: var(--ink-soft); margin: 0 0 6px; }
-#modal-body .tip-ic { display: flex; justify-content: center; gap: 10px; margin-bottom: 8px; }
-#modal-body .tip-ic .tile-mini { width: 46px; height: 46px; position: relative; }
-#modal-body .whatif { list-style: none; padding: 0; margin: 0 0 6px; text-align: left; font-size: .88rem; max-height: 46vh; overflow: auto; }
-#modal-body .whatif li { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 12px; margin-bottom: 4px; background: #fff; box-shadow: inset 0 0 0 2px var(--card-edge); }
-#modal-body .whatif li svg { width: 18px; height: 18px; flex: none; }
-#modal-body .whatif .mv { font-weight: 900; min-width: 74px; }
-.howto .mods { list-style: none; padding: 0; }
-.howto .mods li { display: flex; gap: 8px; align-items: flex-start; }
-.howto .mods svg { width: 20px; height: 20px; flex: none; margin-top: 1px; }
-
 /* ------------------------------------------------------------------ Schmale Displays (iPhone hochkant) */
 @media (max-width: 480px) {
   .screen-game { gap: 7px; }
@@ -535,10 +462,6 @@ button.arrow:active:not(:disabled) .arrow-key { transform: translateY(2px); box-
   .help { font-size: .7rem; }
   .target-card { padding: 6px 10px 7px; gap: 3px; }
   .slot { width: 27px; height: 29px; font-size: 1rem; }
-  .modstatus { font-size: .72rem; gap: 4px; padding: 2px 8px; }
-  .mod-chip svg { width: 14px; height: 14px; }
-  .controls .pill.toggle .lbl { display: none; }      /* schmal: Vorschau-Schalter nur als Auge (aria-label bleibt) */
-  .controls .pill.toggle { padding: 8px 12px; }
   .controls { width: 100%; gap: 7px; flex-wrap: nowrap; }
   .controls .pill { padding: 8px 6px; gap: 5px; white-space: nowrap; }
   #btn-hint > svg.ic { display: none; }               /* schmal: Glühbirne weglassen, Zähler bleibt sichtbar */
@@ -560,11 +483,11 @@ button.arrow:active:not(:disabled) .arrow-key { transform: translateY(2px); box-
 /* iPhone-Höhe: Hilfetext steht im „So geht's“-Dialog, unten bleibt Platz fürs Brett */
 @media (max-height: 900px) and (max-width: 480px) { #game > .help { display: none; } }
 @media (max-width: 360px) {
-  .pill-sm span { display: none; }   /* ganz schmal: „Was passiert?“ nur als Icon (aria-label bleibt) */
+  .pill-sm span { display: none; }   /* ganz schmal: nur Icons auf den kleinen Pillen */
 }
 @media (prefers-reduced-motion: reduce) {
   .pill, .hud-combo, #word-flash, #combo-pop, .modal, .modal-card, .screen { transition: none; }
-  .bob, #board.intro .tile .face, .tile.planted .face, .tile.bloom .face, #bloom::before, #bloom svg { animation: none; }
+  .bob, #board.intro .tile .face, .tile.bloom .face, #bloom::before, #bloom svg { animation: none; }
 }
 /* Niedrige Displays: Startseite kompakter */
 @media (max-height: 700px) {

@@ -6,7 +6,7 @@
  *               (Gesamtpunktzahl = Summe der besten Level-Punkte)
  *   daily     – Ergebnis des Tagesrätsels pro Datum
  *   tips      – bereits gezeigte Tutorial-Hinweise
- *   prefs     – Einstellungen (Vorschau an/aus)
+ *   prefs     – Einstellungen (älterer Schlüssel `preview` wird noch gelesen, aber nicht mehr benutzt)
  * `storage` ist ein localStorage-ähnliches Objekt ({ getItem, setItem }) oder null
  * (z. B. privates Surfen / Node) – dann wird nur im Speicher gearbeitet.
  *

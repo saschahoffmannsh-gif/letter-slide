@@ -1,13 +1,13 @@
 # Wortgarten
 
-Ein deutsches Wort-Schiebepuzzle mit **Zielwort pro Level** und **Modifikatoren** (Stein, Brunnen,
-Trieb). Reines HTML/CSS/JavaScript, **keine Abhängigkeiten, kein Build-Schritt, keine Bilddateien**.
+Ein deutsches Wort-Schiebepuzzle mit **Zielwort pro Level**. Reines HTML/CSS/JavaScript,
+**keine Abhängigkeiten, kein Build-Schritt, keine Bilddateien**.
 Optimiert fürs iPhone (hochkant, Touch), läuft genauso am Desktop. Live:
 <https://saschahoffmannsh-gif.github.io/letter-slide/>
 
 Hervorgegangen aus dem Prototyp *Letter Slide* (Stand eingefroren als Git-Tag `letter-slide-v1`).
 Das Design (Pastell-Candy, weiße Kacheln, Zerbröseln mit Rieselgeräusch, Touch-Optimierung) ist
-unverändert übernommen; neue Elemente nutzen dieselben Komponenten und Theme-Variablen.
+unverändert übernommen.
 
 ## Spielidee & Regeln
 
@@ -17,29 +17,24 @@ unverändert übernommen; neue Elemente nutzen dieselben Komponenten und Theme-V
   `_ _ _ _ _ _`. Steht das Zielwort waagerecht (links→rechts) oder senkrecht (oben→unten) **exakt**
   als zusammenhängende Folge im Gitter (nicht nur als Teil eines längeren Worts), ist das Level
   gelöst: das Wort blüht auf, Dialog *„Level X gelöst! Y Punkte. Züge: N.“* → **Nächstes Level**.
-- **Kurze Wörter** (3–5 Buchstaben aus der Wortliste, nicht das Zielwort) werden wie bisher
-  gelöscht (Zerbröseln), geben **0 Punkte**, aber **pflanzen einen Modifikator** – je nach Lage:
-
-| Lage des kurzen Worts | Modifikator | Wirkung |
-|---|---|---|
-| berührt eines der 4 Mittelfelder | **Trieb** (grün, Blatt) | ein freies Nachbarfeld bekommt einen seltenen Buchstaben (Q/X/Y/J) |
-| waagerecht in der unteren Hälfte (Zeile 4–6) oder senkrecht links (Spalte 1–3) | **Stein** (grau, Stein) | Buchstabe ist fixiert: wird beim Schieben übersprungen, fällt nicht |
-| senkrecht rechts (Spalte 4–6) oder waagerecht oben (Zeile 1–3) | **Brunnen** (blau, Tropfen) | Zielwort-Buchstaben auf Brunnen **verdoppeln** die Punkte |
-
-- **Zielwort-Fortschritt ist geschützt:** Die längste richtige Teilfolge des Zielworts im Brett
-  (mindestens 2 Buchstaben am Stück in Leserichtung, z. B. `WAERM` für WAERME) ist zart lila
-  unterstrichen. Ein kurzes Wort, das eines dieser Felder benutzt, wird **nicht** gelöscht und
-  pflanzt nichts – auch nicht, wenn es selbst ein Präfix des Zielworts in derselben Linie ist
-  (z. B. TOR bei TORTE: das ist einfach Fortschritt).
-- Danach fallen Buchstaben nach unten, oben wird nachgefüllt; neue Wörter lösen **Kaskaden** aus.
-- **Punkte fürs Zielwort:** `Länge × 10 × 2^(Brunnen im Wort) × (1 + 0,5 × Kaskaden) × (1 − 0,2 × Hinweise)`.
+- **Kurze Wörter** (3–5 Buchstaben aus der Wortliste, nicht das Zielwort) **zerbröseln**
+  (0 Punkte); von oben fällt Neues nach. Das kann **Kaskaden** auslösen.
+- **Zielbuchstaben sind geschützt:** Die Kacheln, die zum Bilden des Zielworts gebraucht werden
+  (`neededCells` in `logic.js`), sind hell und zart lila unterstrichen. Sie **zerbröseln nie**
+  und **bleiben bei der Gravitation stehen** (Nachfüll-Buchstaben füllen um sie herum). Schieben
+  bewegt sie ganz normal mit der Zeile oder Spalte.
+  - Zur Menge gehören alle Felder der besten Teilfolge am Stück (`bestPartialRun`, ab 2 Buchstaben)
+    plus weitere Felder in Leserichtung, bis für jeden Zielwort-Buchstaben die benötigte Anzahl
+    gedeckt ist. Doppelbuchstaben (z. B. E in KAFFEE, S in WASSER) werden nur so oft geschützt,
+    wie das Wort sie braucht; überzählige gleiche Buchstaben dürfen zerbröseln.
+  - Läuft ein kurzes Wort durch eine geschützte Kachel, zerbröseln nur die übrigen Buchstaben.
+- Die **Slots** zeigen den Fortschritt am Stück: Buchstaben der aktuellen Teilfolge erscheinen
+  **zart in Lavendel**; Hinweis-Buchstaben bleiben kräftig.
+- **Punkte fürs Zielwort:** `Länge × 10 × (1 + 0,5 × Kaskaden) × (1 − 0,2 × Hinweise)`.
   Gesamtpunkte = Summe der besten Ergebnisse aller Level.
-- **Vorschau** (Schalter mit Auge, standardmäßig an): vor jedem Zug blitzen die Felder, auf denen
-  ein Modifikator entstehen würde, 800 ms gelb auf (mit Typ-Icon). Zusätzlich listet
-  **„Was passiert?“** alle Züge, die gerade Modifikatoren pflanzen würden (Felder A–F / 1–6).
 - **Hinweis** (3 pro Level, kostet je 20 % der Level-Punkte): zeigt einen fehlenden Buchstaben des
   Zielworts, seine Position im Wort und die ungefähre Lage im Gitter; der Slot wird aufgedeckt.
-- **Undo** (bis 50 Schritte, stellt auch Steine, Brunnen, Triebe und den Zufallszustand wieder her),
+- **Undo** (bis 50 Schritte, stellt Grid, Punkte, Züge und den Zufallszustand wieder her),
   **Reset** (Level neu, gleiches Brett), **Teilen** (`Wortgarten Level 7 · 120 Punkte · 4 Züge`).
 
 ### Modi (Startseite)
@@ -48,8 +43,8 @@ unverändert übernommen; neue Elemente nutzen dieselben Komponenten und Theme-V
 |---|---|
 | **Level N spielen** | 12 handgebaute Level, Fortschritt in `localStorage` (Schlüssel `wortgartenStats.v1`) |
 | **Tagesrätsel #N** | ein Level pro Tag, gleich für alle (Seed aus dem lokalen Datum → Level `n mod 12` + eigene Nachfüll-Buchstaben) |
-| **Freies Spiel** | Zufallsbrett ohne Zielwort, alle Modifikatoren aktiv – zum Ausprobieren |
-| **So geht's** | Regeln, Modifikator-Tabelle, Punkteformel |
+| **Freies Spiel** | Zufallsbrett ohne Zielwort – kurze Wörter zerbröseln, zum Ausprobieren |
+| **So geht's** | Regeln und Punkteformel |
 
 ### Lehr-Level (geführtes Tutorial)
 
@@ -61,65 +56,42 @@ richtige Aktion ist erlaubt** – alles andere wackelt kurz und passiert nicht; 
 | Level | Inhalt |
 |---|---|
 | 1 | Hinweis, Länge und Slots; Schieben per Pfeil **und** Wischen; der eine Zug zu WAERME; Jubel + Punkte |
-| 2 | senkrechte Wörter; jeder Zug der Lösung geführt (Pfeil + Richtung); kurze Wörter zerbröseln; Fortschritt ist geschützt (lila) |
+| 2 | senkrechte Wörter; jeder Zug der Lösung geführt; kurze Wörter zerbröseln; Zielwort-Buchstaben zerbröseln nie und bleiben stehen |
 | 3 | wo die Zielbuchstaben liegen, 2 Schubser, Slots als Fortschritt, Hinweis-Knopf – dann frei |
-| 4 / 7 / 10 | erster Stein / Brunnen / Trieb mit geführtem Zug, Karte auf der neuen Kachel, Vorschau-Auge und „Was passiert?“ |
 
 - **„Überspringen“** in jeder Blase schaltet das ganze Tutorial ab; dann übernehmen die bisherigen
   kurzen Tipp-Popups als Rückfall. **„Tutorial wiederholen“** auf der Startseite und in „So geht's“.
 - Gespeichert in `localStorage` (`tutorial.done` je Level, `tutorial.skipped`). Ein geführtes Level
   ersetzt seine Tipp-Popups (`covers`).
 - Alle geforderten Züge sind ein Präfix der Referenzlösung → deterministisch (geseedetes Nachfüllen);
-  `tests/tutorial.test.js` spielt jedes Skript bis „gelöst“ bzw. „Modifikator entstanden“ nach und
-  prüft, dass das Level danach lösbar bleibt.
+  `tests/tutorial.test.js` spielt jedes Skript nach und prüft, dass das Level danach lösbar bleibt.
 - Skripte ändern: `src/tutorial.js` (reine Daten: Text, Anker, geforderter Zug/Knopf, Bedingung).
   Anzeige: `src/coach.js`, Ablauf: `src/main.js` (`runTutorial`, `gate`).
 
 ### Live-Slots und Combo
 
-- Die Slots zeigen den eigenen Fortschritt: Buchstaben der aktuellen richtigen Teilfolge (dieselbe
-  wie die geschützten Felder) erscheinen **zart in Lavendel**; Hinweis-Buchstaben bleiben kräftig.
+- Die Slots zeigen den eigenen Fortschritt: Buchstaben der aktuellen richtigen Teilfolge erscheinen
+  **zart in Lavendel**; Hinweis-Buchstaben bleiben kräftig.
 - Die **Combo-Wolke** ist mit Zielwort (Level, Tagesrätsel) versteckt und springt nur während einer
   echten Kaskade kurz ins HUD. Im Freien Spiel bleibt sie sichtbar.
 
 ### Level-Progression
 
-| Level | Modifikatoren | Zielwörter |
-|---|---|---|
-| 1–3 | keine (Tutorial: 1 / 3 / 6 Züge) | WAERME, MOND, KATZE |
-| 4–6 | Stein | BLUME, REGEN, BAUM |
-| 7–9 | Stein + Brunnen | WASSER, SONNE, KAFFEE |
-| 10–12 | Stein + Brunnen + Trieb | GARTEN, FUCHS, WINTER |
-
-Jedes Level ist **beweisbar lösbar** (Referenzlösung in `src/levels.js`, geprüft von
-`tests/levels.test.js` unter den echten Regeln inkl. Kaskaden). Per Löser bewiesen: Level 1 braucht
-genau 1 Zug, Level 2 mindestens 3, Level 3 mindestens 6 (`FULL=1 npm test`).
+12 Level mit steigender Schwierigkeit, Zielwörter: WAERME, MOND, KATZE, BLUME, REGEN, BAUM,
+WASSER, SONNE, KAFFEE, GARTEN, FUCHS, WINTER. Level 1 braucht genau 1 Zug, Level 2 etwa 3–4 Züge,
+Level 3 ist zerstreut (Referenz 6 Züge). Jedes Level ist **beweisbar lösbar** (Referenzlösung in
+`src/levels.js`, geprüft von `tests/levels.test.js` unter den echten Regeln inkl. Kaskaden).
 
 ## Design-Entscheidungen (Spec-Lücken)
 
-- **Stein beim Schieben:** Steine bleiben stehen, die übrigen Felder der Linie rotieren zyklisch um
-  sie herum. Besteht eine Linie nur aus Steinen, sind ihre Pfeile deaktiviert.
-- **Kurze Wörter** werden gelöscht (Zerbröseln, 0 Punkte); ihr Modifikator wird **nach** Fallen +
-  Nachfüllen gepflanzt, die Position wird aus den Koordinaten **vor** dem Löschen berechnet.
-- **Vorrang**, wenn mehrere Regeln passen: Mitte/Trieb vor Stein vor Brunnen; ist der passende Typ
-  im Level nicht aktiv, entsteht nichts (kein Ersatz-Typ).
-- **Zielfeld:** liegt es außerhalb des Bretts, wird das nächste gültige Feld genommen (geklemmt);
-  ist es schon belegt (Modifikator), das nächstgelegene freie Feld (`nearestFree`).
-- **Schwerkraft** überspringt Steine (sie schweben fest). **Brunnen** ist eine Eigenschaft des
-  Feldes (bleibt liegen, Buchstaben laufen durch). **Trieb** gehört zum Buchstaben und fällt mit.
-- **Trieb:** ersetzt den Buchstaben des nächsten freien Feldes im Uhrzeigersinn um das Wort
-  (Start oben links) durch Q/X/Y/J – Auswahl per geseedetem Zufall (Mulberry32).
-- **Schutz des Fortschritts:** „Fortschritt“ = `bestPartialRun()` in `logic.js`: längste
-  zusammenhängende Folge (waagerecht links→rechts bzw. senkrecht oben→unten), die ein Stück des
-  Zielworts in richtiger Reihenfolge bildet, ab `PROTECT_MIN` = 2 Buchstaben (`config.js`).
-  Gleichstand: Anfang des Zielworts bevorzugt, dann erste Linie – es gibt also genau eine
-  geschützte Folge. Sie wird **in jeder Lösch-Runde neu** bestimmt (auch mitten in Kaskaden).
-  Kurze Wörter, die ein geschütztes Feld enthalten, werden nicht gelöscht und pflanzen keinen
-  Modifikator. Spiel, Vorschau, „Was passiert?“, Löser, Level-Tests und Brett-Markierung benutzen
-  dieselbe Funktion. Nicht verhindert wird, dass geschützte Buchstaben durch Schwerkraft
-  nachrutschen, wenn **darunter** ein anderes kurzes Wort gelöscht wird (sie bleiben erhalten,
-  die Folge kann sich aber verschieben). Das Startbrett eines Levels muss weiterhin ganz ohne kurze
-  Wörter sein (die Prüfung ignoriert den Schutz).
+- **Schutz der Zielbuchstaben:** `neededCells()` in `logic.js` – zuerst die Felder von
+  `bestPartialRun()` (längste zusammenhängende Folge des Zielworts in Leserichtung, ab
+  `PROTECT_MIN` = 2 in `config.js`; Gleichstand: Anfang des Zielworts, dann erste Linie),
+  danach weitere Felder in Leserichtung, bis die Buchstaben-Anzahlen des Zielworts gedeckt sind.
+  Spiel, Anzeige, Löser und Tests benutzen dieselbe Funktion. Ein vollständig geschütztes kurzes
+  Wort (z. B. ein Präfix des Zielworts) zerbröselt nicht und löst keine Endlos-Kaskade aus.
+- **Gravitation:** geschützte Kacheln bleiben stehen, andere Buchstaben fallen an ihnen vorbei,
+  Nachfüllen füllt die Lücken um sie herum. Schieben ist davon unabhängig.
 - **Zielwort** zählt nur exakt (nicht als Teil eines längeren Worts) und wird nie als kurzes Wort
   gelöscht. Geprüft wird vor jeder Lösch-Runde, also auch mitten in einer Kaskade.
 - **Nachfüllen** ist deterministisch (Seed `wortgarten:<id>` bzw. `wortgarten-daily:<datum>`):
@@ -156,7 +128,7 @@ auf (`src/particles.js`). Die DOM-Kachel wird ausgeblendet und auf einer Vollbil
 (pointer-events: none) weitergezeichnet. Eine waagerechte Front läuft in ~550 ms (ease-in-out)
 von der Oberkante bis zur Unterkante:
 
-- jede Kachel zerfällt in ~850–900 Körner (1–2,5 px, ein paar 3 px) in den Farben ihrer Kachel (weiß bzw. Stein-grau, Brunnen-blau, Trieb-grün – gelesen aus `--c/--s/--d` der Kachel), hellgrau, warmgrau,
+- jede Kachel zerfällt in ~850–900 Körner (1–2,5 px, ein paar 3 px) in den Farben ihrer Kachel (weiß, gelesen aus `--c/--s/--d` der Kachel), hellgrau, warmgrau,
   viele dunkelbraune Buchstaben-Körner und goldene Funken; fast die Hälfte der hellen Körner hat
   eine 1-px-Schattenseite, damit sie auf dem Cremegrund sichtbar bleiben;
 - oberhalb der Front rieseln die Körner als dichter Sand-Strahl nach unten, über das Brett hinaus
@@ -188,14 +160,10 @@ Partikeldichte (gesamt gedeckelt), die Lautstärke nicht. Die Hüllkurve folgt d
 
 Cremefarbener Hintergrund, Bonbon-Titel (**WORT** koralle, **GARTEN** lavendel), **weiße Kacheln**
 mit dunkelbraunen Buchstaben, Pfeile, HUD und Knöpfe in Pastell, Combo-Wolke, eigene In-Game-Dialoge.
-Neu, aber im selben Stil: Zielwort-Karte mit Slots und Hinweiszeile, Modifikator-Status
-(„Stein: 2 | Brunnen: 1 | Trieb: 0“, inaktive Typen ausgegraut), Vorschau-Schalter, Hinweis-Knopf.
+Zielwort-Karte mit Slots, Hinweiszeile und Hinweis-Knopf. Benötigte Zielbuchstaben tragen einen
+zarten Lavendel-Schimmer und einen feinen Unterstrich (gleiche Kachelform).
 
-- **Modifikator-Kacheln** behalten die Kachelform, nur Tönung, Muster und Icon ändern sich:
-  Stein grau mit Stein-Icon, Brunnen blau mit Wellenmuster + Tropfen, Trieb grün mit Sprossenmuster
-  + Blatt (Muster als Inline-SVG-Data-URI). Farben als CSS-Variablen `--stein-*`, `--brunnen-*`,
-  `--trieb-*`, `--preview` oben in `css/style.css`.
-- Icons als `<symbol>` in `index.html` (`i-stone`, `i-drop`, `i-sprout`, `i-bulb`, `i-eye`, …).
+- Icons als `<symbol>` in `index.html` (`i-bulb`, `i-star`, `i-leaf`, …).
 
 ## Ordnerstruktur
 
@@ -203,17 +171,17 @@ Neu, aber im selben Stil: Zielwort-Karte mit Slots und Hinweiszeile, Modifikator
 letter-slide/                # Repo-Name bleibt (GitHub Pages-URL)
 ├── index.html               # Markup + Script-Reihenfolge
 ├── manifest.webmanifest
-├── css/style.css            # Theme-Variablen, Layout, Animationen, Modifikator-Optik
+├── css/style.css            # Theme-Variablen, Layout, Animationen
 ├── src/
-│   ├── config.js            # Wortliste, Gewichtung, Punkte, MODIFIER_RULES, Hinweise, MODES
-│   ├── levels.js            # die 12 Level (Zielwort, Hinweis, Grid, Modifikatoren, Referenzlösung)
+│   ├── config.js            # Wortliste, Gewichtung, Punkte, Hinweise, MODES
+│   ├── levels.js            # die 12 Level (Zielwort, Hinweis, Grid, Referenzlösung)
 │   ├── tutorial.js          # Lehr-Level-Skripte (Daten, in Node ladbar)
 │   ├── coach.js             # Coach Marks: Sprechblase, Abdunkeln, Puls, Wackeln
 │   ├── logic.js             # reine Spiellogik (kein DOM, in Node ladbar)
 │   ├── stats.js             # Fortschritt, Bestwerte, Tagesrätsel, Tipps (localStorage)
-│   ├── audio.js             # WebAudio: Klick, Wort, Rieseln, Pflanzen, Vorschau-Ping, Aufblühen
+│   ├── audio.js             # WebAudio: Klick, Wort, Rieseln, Aufblühen
 │   ├── particles.js         # Canvas-Partikel fürs Zerbröseln
-│   ├── render.js            # DOM-Rendering, HUD, Zielwort, Animationen, Vorschau, Dialoge
+│   ├── render.js            # DOM-Rendering, HUD, Zielwort, Animationen, Dialoge
 │   ├── input.js             # Buttons, Wischgesten, Tastatur
 │   └── main.js              # Ablauf, Startseite, Level-Abschluss, Hinweis, Tutorial-Popups
 ├── tools/
@@ -221,7 +189,7 @@ letter-slide/                # Repo-Name bleibt (GitHub Pages-URL)
 │   ├── solve-level.js       # CLI: node tools/solve-level.js <id> [--min N]
 │   └── generate-levels.js   # Entwickler-Generator für neue Level
 ├── tests/
-│   ├── logic.test.js        # Regeln, Modifikatoren, Vorschau, Zielwort, Hinweise, Undo
+│   ├── logic.test.js        # Regeln, Schutz, Zielwort, Hinweise, Undo
 │   ├── levels.test.js       # Level-Daten, Progression, Lösbarkeit (Löser)
 │   ├── tutorial.test.js     # Lehr-Level-Skripte nachspielen
 │   ├── stats.test.js        # localStorage: Fortschritt, Tagesrätsel
@@ -237,8 +205,8 @@ Die globalen Objekte heißen aus Kompatibilitätsgründen weiter `LetterSlideCon
 `module.exports` in Node).
 
 Kernfunktionen in `src/logic.js`: `slideLine`, `findWords`, `checkTargetWord`, `findShortWords`,
-`placeModifier`, `planModifiers`, `applyModifiers`, `applyGravity`, `refill`, `cascade`,
-`targetScore`, `previewModifiers`, `whatIf`, `useHint`, `performSlide`, `undo`, `reset`,
+`neededCells`, `bestPartialRun`, `clearWords`, `applyGravity`, `refill`, `cascade`,
+`targetScore`, `useHint`, `performSlide`, `undo`, `reset`,
 `loadLevel`, `nextLevel`, `startDaily`, `startFree`, `validateLevel`.
 
 ## Anpassen (Kurzanleitung)
@@ -250,7 +218,6 @@ Kernfunktionen in `src/logic.js`: `slideLine`, `findWords`, `checkTargetWord`, `
    {
      id: 13, hint: "fliegt im Herbst", length: 6, target: "DRACHE",
      grid: [["D","R","A","C","H","E"], /* … 6 Zeilen à 6 Buchstaben … */],
-     modifiersEnabled: { stein: true, brunnen: true, trieb: true },
      solution: ["R2-", "C4+"]   // R = Zeile, C = Spalte, 1–6, + = rechts/unten, - = links/oben
    }
    ```
@@ -261,23 +228,11 @@ Kernfunktionen in `src/logic.js`: `slideLine`, `findWords`, `checkTargetWord`, `
    (bei mehr als 12 Leveln die Zahl im ersten Test anpassen). Startseite, Kopfzeile
    „Level X von N“ und Tagesrätsel richten sich nach `LEVELS.length`.
 
-### Modifikator-Regeln ändern
-
-In **`src/config.js`** → `MODIFIER_RULES`. Die Liste wird von oben nach unten geprüft, die erste
-passende Regel gewinnt (Reihenfolge = Vorrang). `w` ist das kurze Wort mit `axis` (`"row"`/`"col"`),
-`line` (0–5), `cells` (Feld-Indizes), `g` bietet Helfer wie `isCenter`:
-```js
-{ type: "brunnen", when: (w) => (w.axis === "col" && w.line >= 3) || (w.axis === "row" && w.line <= 2) }
-```
-Wo der Modifikator landet, steht in `targetCellFor()` (`logic.js`), die Trieb-Buchstaben in
-`RARE_LETTERS`, die Länge kurzer Wörter in `SHORT_MIN`/`SHORT_MAX`, die Vorschau-Dauer in
-`PREVIEW_MS`. Welche Typen ein Level erlaubt, steht pro Level in `modifiersEnabled`.
-
 ### Punkteformel anpassen
 
-In **`src/config.js`**: `POINTS_PER_LETTER` (10), `BRUNNEN_FACTOR` (2 = Verdopplung pro
-Brunnen-Feld), `COMBO_STEP` (0,5 pro Kaskadenstufe), `HINTS_PER_LEVEL` (3), `HINT_PENALTY`
-(0,2 = −20 % pro Hinweis). Die Formel selbst steht in `targetScore()` in `src/logic.js`;
+In **`src/config.js`**: `POINTS_PER_LETTER` (10), `COMBO_STEP` (0,5 pro Kaskadenstufe),
+`HINTS_PER_LEVEL` (3), `HINT_PENALTY` (0,2 = −20 % pro Hinweis). Die Länge kurzer Wörter steht in
+`SHORT_MIN`/`SHORT_MAX`. Die Formel selbst steht in `targetScore()` in `src/logic.js`;
 Tests in `tests/logic.test.js` („targetScore …“) entsprechend anpassen.
 
 ### Weiteres
@@ -294,16 +249,14 @@ npm test          # node:test, Node ≥ 20, keine Abhängigkeiten (~1 s)
 FULL=1 npm test   # zusätzlich: vollständiger Beweis „Level 3 braucht ≥ 6 Züge“ (~1 min)
 ```
 
-Geprüft u. a.: Schieben um Steine, Stein-Linien gesperrt, kurze Wörter → richtiger Modifikator je
-Lage, Vorrang, Klemmen/Belegt-Regel, Trieb-Ring + seltene Buchstaben, Schwerkraft mit Steinen,
-Brunnen bleibt / Trieb fällt mit, exakter Zielwort-Treffer (nicht in längerem Wort), Zielwort in der
-Kaskade, Punkteformel inkl. Brunnen/Kaskade/Hinweise, Vorschau = tatsächliches Ergebnis ohne
-Zustandsänderung, Hinweise, Undo/Reset stellen Modifikatoren exakt wieder her, Determinismus,
-Tagesrätsel, Teilen-Text; alle 12 Level gültig, Progression, jede Referenzlösung löst ihr Level,
-Mindestzugzahlen per Löser, Fortschritt in `localStorage`; Fortschritts-Schutz: kreuzendes kurzes
-Wort durch ein geschütztes Feld bleibt stehen, Präfix in derselben Linie bleibt stehen, Zielwort
-wird nie zerstört, Schutz übersteht Kaskaden, plus Zufallsspiel in allen 12 Leveln
-(kein geschütztes Feld und kein Zielwort wird je gelöscht).
+Geprüft u. a.: zyklisches Schieben, exakter Zielwort-Treffer (nicht in längerem Wort),
+Punkteformel inkl. Kaskade/Hinweise, Hinweise, Undo/Reset und PRNG, Determinismus, Tagesrätsel,
+Teilen-Text; alle 12 Level gültig, jede Referenzlösung löst ihr Level, Mindestzugzahlen per Löser,
+Fortschritt in `localStorage` (auch ältere Stände mit Modifikator-Tipps laden ohne Fehler);
+Schutz: benötigte Zielbuchstaben inkl. Einzelbuchstaben und Doppelbuchstaben (KAFFEE, WASSER),
+kurze Wörter zerbröseln nur ungeschützte Felder, Präfix bleibt stehen, Zielwort wird nie zerstört,
+geschützte Kacheln fallen nicht, plus Zufallsspiel in allen 12 Leveln (kein benötigter Buchstabe
+geht verloren).
 
 Optionaler Browser-Test (lokales Chrome, nicht in CI):
 
@@ -313,11 +266,10 @@ CHROME_PATH=/usr/bin/google-chrome SCREENSHOTS=./screenshots npm run test:browse
 ```
 
 Desktop + iPhone 14 (Touch): Startseite, Level 1 per Pfeil und per Wischen lösen, Abschluss-Dialog,
-„Nächstes Level“, Fortschritt, Hinweis, „Was passiert?“, Vorschau-Aufblitzen, Undo entfernt
-Modifikator, Brett mit allen drei Modifikatoren, Theme-Variablen unverändert, alles passt in den
-Bildschirm, Touch-Ziele ≥ 44 px, keine JS-Fehler. Lehr-Level (frischer Spieler, iPhone 14): Blasen
-auf dem Bildschirm, Abdunkeln, falsche Aktion blockiert + Wackeln, richtige Aktion (Wischen/Pfeil)
-führt weiter, Jubel + Abschluss-Dialog, L2-Zugführung, Geister-Slots, Überspringen, Wiederholen
-(Startseite und „So geht's“), L4 erster Stein mit Vorschau und „Was passiert?“, Combo versteckt.
+„Nächstes Level“, Fortschritt, Hinweis, Schutz-Markierung, Undo, Theme-Variablen unverändert,
+alles passt in den Bildschirm, Touch-Ziele ≥ 44 px, keine JS-Fehler. Lehr-Level (frischer Spieler,
+iPhone 14): Blasen auf dem Bildschirm, Abdunkeln, falsche Aktion blockiert + Wackeln, richtige
+Aktion (Wischen/Pfeil) führt weiter, Jubel + Abschluss-Dialog, L2-Zugführung, Schutz-Erklärung,
+Geister-Slots, Überspringen, Wiederholen (Startseite und „So geht's“), Combo versteckt.
 
 CI: `.github/workflows/test.yml` führt bei Push/PR die Syntaxprüfung und `npm test` (Node 20) aus.

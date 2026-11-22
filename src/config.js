@@ -2,7 +2,7 @@
  * Wortgarten – KONFIGURATION
  * ===========================
  * Alles, was man typischerweise austauschen oder feinjustieren will, steht hier:
- * Wortliste, Buchstaben-Gewichtung, Modifikator-Regeln, Punkteformel, Limits, Modi.
+ * Wortliste, Buchstaben-Gewichtung, Punkteformel, Limits, Modi.
  * (Die Level selbst stehen in src/levels.js.)
  *
  * Läuft im Browser (klassisches <script>, legt `LetterSlideConfig` global ab)
@@ -116,52 +116,28 @@
    * ======================================================================
    */
 
-  /** Kurze Wörter (Werkzeuge): Länge SHORT_MIN..SHORT_MAX. Sie geben 0 Punkte, pflanzen Modifikatoren. */
+  /** Kurze Wörter: Länge SHORT_MIN..SHORT_MAX. Sie zerbröseln (0 Punkte) und werden von oben nachgefüllt. */
   const SHORT_MIN = 3;
   const SHORT_MAX = 5;
   /**
-   * Zielwort-Fortschritt schützen: die längste richtige Teilfolge des Zielworts im Brett (ab dieser
-   * Länge) wird nicht von kreuzenden kurzen Wörtern zerstört (siehe bestPartialRun in logic.js).
+   * Mindestlänge einer „Teilfolge am Stück“ (bestPartialRun): ab dieser Länge erscheint der
+   * Fortschritt in den Slots. Einzelne benötigte Zielbuchstaben sind trotzdem geschützt
+   * (siehe neededCells in logic.js).
    */
   const PROTECT_MIN = 2;
 
   /*
    * PUNKTEFORMEL fürs Zielwort  >>> HIER ANPASSEN <<<
-   *   Punkte = Länge × POINTS_PER_LETTER × BRUNNEN_FACTOR^(Brunnen im Pfad)
+   *   Punkte = Länge × POINTS_PER_LETTER
    *            × Kaskaden-Multiplikator × (1 − HINT_PENALTY × benutzte Hinweise)
    *   Kaskaden-Multiplikator = 1 + COMBO_STEP × (Anzahl Löschrunden, bevor das Zielwort entstand)
    *            -> direkt durch den Slide ×1, nach 1 Kaskade ×1,5, nach 2 ×2 …
    *   (berechnet in targetScore() in logic.js)
    */
   const POINTS_PER_LETTER = 10;
-  const BRUNNEN_FACTOR = 2;
   const COMBO_STEP = 0.5;
   const HINTS_PER_LEVEL = 3;
   const HINT_PENALTY = 0.2;
-
-  /*
-   * MODIFIKATOR-REGELN  >>> HIER ANPASSEN <<<
-   * Für jedes kurze Wort wird der ERSTE passende Eintrag genommen (Reihenfolge = Vorrang),
-   * aber nur, wenn der Modifikator im Level aktiv ist (level.modifiersEnabled).
-   * Ist der Typ im Level aus, entsteht nichts (es wird NICHT auf die nächste Regel ausgewichen –
-   * so ist für den Spieler eindeutig, was ein Wort an dieser Stelle bewirkt).
-   *   when(word, g)  word = { axis: "row"|"col", line, start, length, cells }, g = Geometrie-Helfer
-   *   type           "trieb" | "stein" | "brunnen"
-   * Zielfeld: stein/brunnen = Feld rechts vom letzten Buchstaben (waagerecht) bzw. darunter
-   * (senkrecht); trieb = erstes freies Feld im Uhrzeigersinn um das Wort (siehe logic.js).
-   */
-  const MODIFIER_RULES = [
-    // Mitte: Wort berührt eines der 4 zentralen Felder (|r-2,5| < 1 und |c-2,5| < 1)
-    { type: "trieb",   when: (w, g) => w.cells.some((i) => g.isCenter(i)) },
-    // waagerecht in der unteren Hälfte (Zeile 4–6) oder senkrecht in der linken Hälfte (Spalte 1–3)
-    { type: "stein",   when: (w) => (w.axis === "row" && w.line >= 3) || (w.axis === "col" && w.line <= 2) },
-    // senkrecht in der rechten Hälfte (Spalte 4–6) oder waagerecht in der oberen Hälfte (Zeile 1–3)
-    { type: "brunnen", when: (w) => (w.axis === "col" && w.line >= 3) || (w.axis === "row" && w.line <= 2) }
-  ];
-  /** Seltene Buchstaben für Triebe (Auswahl per geseedetem PRNG). */
-  const RARE_LETTERS = ["Q", "X", "Y", "J"];
-  /** Dauer des gelben Aufblitzens der Vorschau (ms). */
-  const PREVIEW_MS = 800;
 
   /** Undo-Tiefe (Spec: mindestens 20). */
   const HISTORY_LIMIT = 50;
@@ -176,7 +152,7 @@
    * MODI
    *   level  – Level 1..n aus src/levels.js (Fortschritt in localStorage)
    *   daily  – Tagesrätsel: ein Level aus der Liste, per Datum gewählt (für alle gleich)
-   *   free   – Freies Spiel: Zufallsbrett, alle Modifikatoren, kein Zielwort (zum Ausprobieren)
+   *   free   – Freies Spiel: Zufallsbrett, kein Zielwort (kurze Wörter zerbröseln, zum Ausprobieren)
    *   title(state)    Anzeige unter dem Titel
    *   shareTag(state) Kennung im Teilen-Text
    */
@@ -200,8 +176,7 @@
 
   const config = {
     GRID_SIZE, MIN_WORD_LENGTH, WORD_LIST_RAW, LETTER_WEIGHTS, USE_UNIFORM_LETTERS,
-    SHORT_MIN, SHORT_MAX, PROTECT_MIN, POINTS_PER_LETTER, BRUNNEN_FACTOR, COMBO_STEP, HINTS_PER_LEVEL, HINT_PENALTY,
-    MODIFIER_RULES, RARE_LETTERS, PREVIEW_MS,
+    SHORT_MIN, SHORT_MAX, PROTECT_MIN, POINTS_PER_LETTER, COMBO_STEP, HINTS_PER_LEVEL, HINT_PENALTY,
     HISTORY_LIMIT, MAX_CASCADE_LEVELS, MAX_BOARD_ATTEMPTS, DAILY_EPOCH, MODES
   };
 

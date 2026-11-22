@@ -17,11 +17,10 @@
  *   tap     "whatif" | "hint" | "preview": nur dieser Knopf ist erlaubt, danach weiter
  *   button  Beschriftung des Weiter-Knopfs bei Info-Schritten (Standard „Weiter“)
  *   needs   Bedingung, die beim Erreichen des Schritts gelten muss (prüft tests/tutorial.test.js):
- *           "protected" | "words" | "mod:stein" | "mod:brunnen" | "mod:trieb" | "solved"
+ *           "protected" | "words" | "solved"
  *
  * ANCHORS: target, hint-text, slots, score, board, center, letters, protected,
- *          arrow:R1- (Randpfeil des Zugs), row:0, col:5, tile:r,c, mod:stein|brunnen|trieb,
- *          btn:hint | btn:preview | btn:whatif
+ *          arrow:R1- (Randpfeil des Zugs), row:0, col:5, tile:r,c, btn:hint
  * Züge: R = Zeile, C = Spalte, Nummer 1–6, "+" = rechts/unten, "-" = links/oben.
  * Alle Züge sind Präfixe der Referenzlösungen in src/levels.js -> deterministisch (geseedetes Nachfüllen).
  */
@@ -40,7 +39,7 @@
       ],
       afterSolve: [
         { anchor: "row:0", needs: "solved", text: "Geschafft! <b>WAERME</b> steht am Stück – das Zielwort blüht auf. 🌸" },
-        { anchor: "score", text: "Punkte: <b>6 Buchstaben × 10 = 60</b>. Kaskaden und Brunnen erhöhen sie, jeder Hinweis kostet 20 %.", button: "Super!" }
+        { anchor: "score", text: "Punkte: <b>6 Buchstaben × 10 = 60</b>. Kaskaden erhöhen sie, jeder Hinweis kostet 20 %.", button: "Super!" }
       ]
     },
     2: {
@@ -49,7 +48,7 @@
         { anchor: "col:5", text: "Neues Ziel, 4 Buchstaben. Wörter zählen auch <b>senkrecht</b> – von oben nach unten gelesen, wie in dieser Spalte." },
         { anchor: "arrow:R1+", focus: ["row:0"], move: "R1+", text: "Los geht's: Schieb <b>Zeile 1 nach rechts</b> (Pfeil → oder nach rechts wischen)." },
         { anchor: "board", needs: "words", text: "Hoppla: Dabei sind kurze Wörter entstanden (<b>{words}</b>). Kurze Wörter (3–5 Buchstaben) <b>zerbröseln</b>, von oben fällt Neues nach – das Brett verändert sich." },
-        { anchor: "protected", focus: ["slots"], needs: "protected", text: "Die <b>lila unterstrichenen</b> Kacheln sind schon richtig am Stück – oben in den Slots siehst du sie zart. Sie sind <b>geschützt</b>: Kurze Wörter zerbröseln sie nicht." },
+        { anchor: "protected", focus: ["slots"], needs: "protected", text: "Die hellen, <b>lila unterstrichenen</b> Kacheln gehören zu deinem Zielwort. <b>Zielwort-Buchstaben zerbröseln nie und bleiben stehen</b> – auch einzelne. In den Slots siehst du den Fortschritt am Stück zart." },
         { anchor: "arrow:C1-", focus: ["col:0"], move: "C1-", text: "Jetzt <b>Spalte 1 nach oben</b> (Pfeil ↑ oder nach oben wischen)." },
         { anchor: "arrow:R3-", focus: ["row:2", "col:5"], move: "R3-", text: "Und zum Schluss <b>Zeile 3 nach links</b> – achte auf die rechte Spalte!" }
       ],
@@ -67,37 +66,6 @@
         { anchor: "btn:hint", text: "Hängst du fest? Der <b>Hinweis</b> verrät einen fehlenden Buchstaben und wo er ungefähr liegt – kostet aber 20 % der Punkte. Ab jetzt bist du dran!", button: "Los geht's" }
       ]
     },
-    4: {
-      covers: ["intro4", "first_stein"],
-      steps: [
-        { anchor: "board", text: "Neu: <b>Steine</b>! Ein kurzes Wort <b>waagerecht in der unteren Hälfte</b> oder <b>senkrecht in der linken Hälfte</b> pflanzt einen Stein." },
-        { anchor: "btn:preview", text: "Das <b>Auge</b> ist die Vorschau: Wo ein Modifikator entstehen würde, blitzt das Feld vor dem Zug kurz <b>gelb</b> auf." },
-        { anchor: "arrow:C1+", focus: ["col:0"], move: "C1+", text: "Zuerst <b>Spalte 1 nach unten</b>." },
-        { anchor: "arrow:R2-", focus: ["row:1"], move: "R2-", text: "Jetzt <b>Zeile 2 nach links</b> – achte auf das gelbe Aufblitzen!" },
-        { anchor: "mod:stein", needs: "mod:stein", text: "Ein <b>Stein</b>! Er hält seinen Buchstaben fest: Beim Schieben läuft die Linie um ihn herum, und er fällt nicht nach unten." },
-        { anchor: "btn:whatif", tap: "whatif", text: "Tippe auf <b>„Was passiert?“</b> – dort stehen alle Züge, die gerade einen Modifikator pflanzen würden." },
-        { anchor: "target", text: "Jetzt du: Finde das Wort, das <b>im Garten wächst</b>. Steine helfen dir, Buchstaben festzuhalten.", button: "Los geht's" }
-      ]
-    },
-    7: {
-      covers: ["intro7", "first_brunnen", "first_stein"],
-      steps: [
-        { anchor: "board", text: "Neu: <b>Brunnen</b>! Ein kurzes Wort <b>senkrecht in der rechten Hälfte</b> oder <b>waagerecht in der oberen Hälfte</b> lässt einen Brunnen entstehen." },
-        { anchor: "arrow:C2-", focus: ["col:1"], move: "C2-", text: "Bereite es vor: <b>Spalte 2 nach oben</b>." },
-        { anchor: "arrow:R1-", focus: ["row:0"], move: "R1-", text: "Und jetzt <b>Zeile 1 nach links</b> – die Vorschau zeigt dir vorher, was entsteht." },
-        { anchor: "mod:brunnen", needs: "mod:brunnen", text: "Ein <b>Brunnen</b>! Er bleibt auf seinem Feld liegen. Läuft dein Zielwort hindurch, zählt es <b>doppelt</b> (zwei Brunnen: ×4)." },
-        { anchor: "btn:whatif", focus: ["btn:preview"], text: "Vorschau (Auge) und <b>„Was passiert?“</b> zeigen dir jederzeit, welcher Zug Brunnen und Steine pflanzt.", button: "Los geht's" }
-      ]
-    },
-    10: {
-      covers: ["intro10", "first_trieb"],
-      steps: [
-        { anchor: "center", text: "Neu: <b>Triebe</b>! Berührt ein kurzes Wort eines der <b>4 Mittelfelder</b>, sprießt ein Trieb." },
-        { anchor: "arrow:R4+", focus: ["row:3"], move: "R4+", text: "Probier es: <b>Zeile 4 nach rechts</b>." },
-        { anchor: "mod:trieb", needs: "mod:trieb", text: "Ein <b>Trieb</b>! Er bringt einen seltenen Buchstaben (Q, X, Y oder J) ins Spiel und fällt mit seinem Buchstaben nach unten." },
-        { anchor: "btn:whatif", focus: ["btn:preview"], text: "Ab jetzt sind alle drei Modifikatoren aktiv. Vorschau und <b>„Was passiert?“</b> helfen beim Planen.", button: "Los geht's" }
-      ]
-    }
   };
 
   /** "R1-" -> { axis, index, dir } */
@@ -121,11 +89,7 @@
     if (!need) return true;
     if (need === "solved") return !!state.solved;
     if (need === "words") return wordsOf(lastResult).length > 0;
-    if (need === "protected") return Logic.protectedCells(state.grid, state.target).size > 0;
-    if (need.startsWith("mod:")) {
-      const t = need.slice(4);
-      return t === "trieb" ? state.sprout.some(Boolean) : state.cellMod.some((m) => m === t);
-    }
+    if (need === "protected") return Logic.neededCells(state.grid, state.target).size > 0;
     return false;
   }
 

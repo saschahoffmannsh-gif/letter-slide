@@ -1,24 +1,17 @@
 /*
  * Wortgarten – SPIELLOGIK
  * =======================
- * Reine Logik ohne DOM-Zugriff: PRNG, Brett-Operationen, Wortsuche, Modifikatoren
- * (Stein/Brunnen/Trieb), Zielwort-Prüfung, Kaskaden, Punkte, Hinweise, Vorschau,
- * Level laden, Undo/Reset, Teilen-Text.
+ * Reine Logik ohne DOM-Zugriff: PRNG, Brett-Operationen, Wortsuche, Zielwort-Prüfung,
+ * Schutz benötigter Zielbuchstaben, Kaskaden, Punkte, Hinweise, Level laden, Undo/Reset,
+ * Teilen-Text.
  *
  * DATENMODELL (Zustand `state`)
  *   grid[36]     Buchstaben, Index = Zeile * 6 + Spalte (null nur kurz während Löschen/Fallen)
- *   cellMod[36]  Modifikator des FELDES: null | "stein" | "brunnen"
- *                  stein   – Feld UND sein Buchstabe sind fest: Slides überspringen das Feld,
- *                            die Gravitation lässt Buchstaben daran vorbeifallen, beim Löschen
- *                            bleibt der Stein-Buchstabe stehen.
- *                  brunnen – Eigenschaft der Position: Buchstaben gleiten normal hindurch;
- *                            verläuft das Zielwort über das Feld, zählt es ×2.
- *   sprout[36]   true = der Buchstabe in dieser Zelle ist ein TRIEB (seltener Buchstabe).
- *                  Der Trieb gehört zum BUCHSTABEN: er wandert bei Slides und beim Fallen mit
- *                  (Spec: „normaler Buchstabe mit grünem Hintergrund“). Wird er Teil eines
- *                  kurzen Worts, wird er mit gelöscht.
- *   Ein Feld trägt höchstens EINEN Modifikator: neue Modifikatoren weichen auf das nächste
- *   freie Feld aus (kein Überschreiben).
+ *   Zielbuchstaben (neededCells): pro Zielwort-Buchstabe so viele Kacheln, wie das Wort braucht
+ *                  (Doppelbuchstaben wie E in KAFFEE: höchstens die benötigte Anzahl), plus alle
+ *                  Felder der besten Teilfolge (bestPartialRun). Sie zerbröseln nie. Bei der
+ *                  Gravitation bleiben sie stehen (Nachfüll-Buchstaben füllen um sie herum);
+ *                  Schieben bewegt sie ganz normal mit der Zeile/Spalte.
  *
  * Browser: nach config.js und levels.js laden, legt `LetterSlideLogic` global ab
  *          (interne Namen „LetterSlide…“ bleiben aus Kompatibilität bestehen).
@@ -35,11 +28,10 @@
 
   const {
     GRID_SIZE, MIN_WORD_LENGTH, WORD_LIST_RAW, LETTER_WEIGHTS, USE_UNIFORM_LETTERS,
-    SHORT_MIN, SHORT_MAX, PROTECT_MIN, POINTS_PER_LETTER, BRUNNEN_FACTOR, COMBO_STEP, HINTS_PER_LEVEL, HINT_PENALTY,
-    MODIFIER_RULES, RARE_LETTERS, HISTORY_LIMIT, MAX_CASCADE_LEVELS, MAX_BOARD_ATTEMPTS, DAILY_EPOCH, MODES
+    SHORT_MIN, SHORT_MAX, PROTECT_MIN, POINTS_PER_LETTER, COMBO_STEP, HINTS_PER_LEVEL, HINT_PENALTY,
+    HISTORY_LIMIT, MAX_CASCADE_LEVELS, MAX_BOARD_ATTEMPTS, DAILY_EPOCH, MODES
   } = CONFIG;
   const N = GRID_SIZE;
-  const MOD_TYPES = ["stein", "brunnen", "trieb"];
 
   /* ---------------------------------------------------------------------
    * WÖRTERBUCH
@@ -123,9 +115,7 @@
   const idx = (r, c) => r * N + c;
   const rowOf = (i) => Math.floor(i / N);
   const colOf = (i) => i % N;
-  /** Zentrales Feld: |r − 2,5| < 1 und |c − 2,5| < 1 (die 4 mittleren Felder). */
-  const isCenter = (i) => Math.abs(rowOf(i) - 2.5) < 1 && Math.abs(colOf(i) - 2.5) < 1;
-  const GEO = { idx, rowOf, colOf, isCenter, size: N };
+  const GEO = { idx, rowOf, colOf, size: N };
 
   /** Alle 12 Linien (6 Zeilen, 6 Spalten) mit ihren Zellindizes. */
   const LINES = (() => {
@@ -136,27 +126,20 @@
   })();
   const lineCells = (axis, index) => LINES[axis === "row" ? index : N + index].cells;
 
-  /** Zellen einer Linie, die sich bewegen dürfen (alles außer Steinen). */
-  function movableCells(cellMod, axis, index) {
-    const cells = lineCells(axis, index);
-    return cellMod ? cells.filter((i) => cellMod[i] !== "stein") : cells.slice();
-  }
+  /** Zellen einer Linie (alle 6; Geschützte Buchstaben werden beim Schieben ganz normal mitbewegt). */
+  function movableCells(axis, index) { return lineCells(axis, index).slice(); }
 
-  /** Kann diese Linie geschoben werden? (Mind. 2 Nicht-Stein-Felder, sonst ist der Pfeil aus.) */
-  function canSlide(state, axis, index) {
-    return movableCells(state.cellMod, axis, index).length >= 2;
-  }
+  /** Kann diese Linie geschoben werden? (Immer, solange das Level läuft – prüft der Aufrufer.) */
+  function canSlide(/* state, axis, index */) { return true; }
 
   /**
    * slideLine – verschiebt eine Zeile/Spalte zyklisch um ein Feld.
-   * Steine bleiben stehen; der Rest der Linie rückt um sie herum (überspringt sie).
-   * Funktioniert für jedes Array (Buchstaben, Trieb-Flags, …).
    * @param dir +1 = rechts/runter, -1 = links/hoch
    * @returns neues Array (Original unverändert)
    */
-  function slideLine(grid, axis, index, dir, cellMod = null) {
+  function slideLine(grid, axis, index, dir) {
     const next = grid.slice();
-    const cells = movableCells(cellMod, axis, index);
+    const cells = lineCells(axis, index);
     const n = cells.length;
     for (let k = 0; k < n; k++) next[cells[k]] = grid[cells[((k - dir) % n + n) % n]];
     return next;
@@ -220,28 +203,44 @@
     return best;
   }
 
-  /** protectedCells – Felder des Zielwort-Fortschritts (Set von Indizes; leer ohne Zielwort). */
-  function protectedCells(grid, target) {
+  /**
+   * neededCells – Kacheln, die zum Bilden des Zielworts gebraucht werden:
+   *   1. alle Felder der besten Teilfolge (bestPartialRun, ab PROTECT_MIN),
+   *   2. plus weitere Felder in Leserichtung (oben links zuerst), bis für jeden
+   *      Zielwort-Buchstaben die benötigte Anzahl gedeckt ist. Doppelbuchstaben
+   *      (z. B. E in KAFFEE, S in WASSER) werden nur so oft geschützt, wie das Wort
+   *      sie braucht; überzählige gleiche Buchstaben dürfen zerbröseln.
+   * Diese Felder zerbröseln nie und bleiben bei der Gravitation stehen.
+   * Ohne Zielwort: leeres Set. Alias: protectedCells (gleiche Menge, für Anzeige/Tests).
+   */
+  function neededCells(grid, target) {
+    if (!target) return new Set();
+    const need = {};
+    for (const ch of target) need[ch] = (need[ch] || 0) + 1;
+    const out = new Set();
     const run = bestPartialRun(grid, target);
-    return new Set(run ? run.cells : []);
+    if (run) {
+      for (const i of run.cells) {
+        const ch = grid[i];
+        if (ch && need[ch] > 0) { out.add(i); need[ch]--; }
+      }
+    }
+    for (let i = 0; i < N * N; i++) {
+      const ch = grid[i];
+      if (ch && need[ch] > 0 && !out.has(i)) { out.add(i); need[ch]--; }
+    }
+    return out;
   }
+  const protectedCells = neededCells;
 
   /**
-   * findShortWords – kurze Wörter (SHORT_MIN..SHORT_MAX), die gelöscht werden und Modifikatoren
-   * pflanzen. Ausgenommen:
-   *   - das Zielwort selbst,
-   *   - Wörter, die nur aus Stein-Feldern bestehen (sonst Endlos-Kaskade),
-   *   - Wörter, die ein GESCHÜTZTES Feld (Zielwort-Fortschritt, siehe bestPartialRun) enthalten:
-   *     sie werden nicht gelöscht und pflanzen nichts. Das gilt auch für ein kurzes Wort, das
-   *     selbst ein Präfix des Zielworts in derselben Linie ist – das ist einfach Fortschritt.
-   * opts.protect: Set geschützter Felder; fehlt es, wird es aus opts.target berechnet.
+   * findShortWords – kurze Wörter (SHORT_MIN..SHORT_MAX), die zerbröseln. Ausgenommen ist nur
+   * das Zielwort selbst. Wörter, die durch geschützte Felder laufen, bleiben in der Liste:
+   * gelöscht werden später nur die nicht geschützten Buchstaben (siehe clearWords).
    */
   function findShortWords(grid, opts = {}) {
-    const { target = null, cellMod = null } = opts;
-    const protect = opts.protect || protectedCells(grid, target);
-    return findWords(grid).filter((m) => m.length >= SHORT_MIN && m.length <= SHORT_MAX && m.word !== target &&
-      !(cellMod && m.cells.every((i) => cellMod[i] === "stein")) &&
-      !m.cells.some((i) => protect.has(i)));
+    const { target = null } = opts;
+    return findWords(grid).filter((m) => m.length >= SHORT_MIN && m.length <= SHORT_MAX && m.word !== target);
   }
 
   /**
@@ -266,49 +265,51 @@
   }
 
   /* ---------------------------------------------------------------------
-   * LÖSCHEN, GRAVITATION, NACHFÜLLEN (mit Steinen)
+   * LÖSCHEN, GRAVITATION, NACHFÜLLEN
    * ------------------------------------------------------------------- */
 
   /**
-   * clearWords – leert alle Zellen aller Treffer gleichzeitig. Stein-Felder bleiben stehen.
-   * @returns { grid, sprout, cleared }
+   * clearWords – leert alle Zellen aller Treffer gleichzeitig, außer geschützten
+   * (neededCells): ein kurzes Wort, das durch Zielbuchstaben läuft, zerbröselt nur
+   * die übrigen Felder.
+   * @returns { grid, cleared }
    */
-  function clearWords(grid, matches, cellMod = null, sprout = null) {
+  function clearWords(grid, matches, protect = null) {
     const marked = new Set();
-    for (const m of matches) for (const i of m.cells) if (!cellMod || cellMod[i] !== "stein") marked.add(i);
+    for (const m of matches) for (const i of m.cells) if (!protect || !protect.has(i)) marked.add(i);
     const next = grid.slice();
-    const sp = sprout ? sprout.slice() : null;
-    for (const i of marked) { next[i] = null; if (sp) sp[i] = false; }
-    return { grid: next, sprout: sp, cleared: [...marked].sort((a, b) => a - b) };
+    for (const i of marked) next[i] = null;
+    return { grid: next, cleared: [...marked].sort((a, b) => a - b) };
   }
 
   /**
-   * applyGravity – Buchstaben fallen in ihrer Spalte nach unten in Lücken. Stein-Felder sind fest:
-   * sie fallen nicht und Buchstaben fallen an ihnen vorbei. Trieb-Flags fallen mit.
-   * @returns { grid, sprout, fromRow } – fromRow[i] = Ursprungszeile des Buchstabens in Zelle i
+   * applyGravity – Buchstaben fallen in ihrer Spalte nach unten in Lücken.
+   * Verankerte Felder (neededCells) bleiben stehen; andere Buchstaben fallen an ihnen
+   * vorbei, Nachfüllen füllt die Lücken um sie herum. Schieben ist davon unabhängig.
+   * @param anchored  Set von Indizes, die nicht fallen (oder null)
+   * @returns { grid, fromRow } – fromRow[i] = Ursprungszeile des Buchstabens in Zelle i
    */
-  function applyGravity(grid, cellMod = null, sprout = null) {
+  function applyGravity(grid, anchored = null) {
     const next = grid.slice();
-    const sp = sprout ? sprout.slice() : null;
     const fromRow = new Array(grid.length).fill(null);
+    const fixed = (i) => anchored && anchored.has(i) && grid[i] != null;
     for (let c = 0; c < N; c++) {
       const cells = [];
       for (let r = 0; r < N; r++) {
         const i = idx(r, c);
-        if (cellMod && cellMod[i] === "stein") fromRow[i] = r; // Stein bleibt, wo er ist
+        if (fixed(i)) fromRow[i] = r;
         else cells.push(i);
       }
-      const items = cells.filter((i) => grid[i] != null).map((i) => ({ v: grid[i], s: sprout ? sprout[i] : false, r: rowOf(i) }));
-      for (const i of cells) { next[i] = null; if (sp) sp[i] = false; }
+      const items = cells.filter((i) => grid[i] != null).map((i) => ({ v: grid[i], r: rowOf(i) }));
+      for (const i of cells) next[i] = null;
       let k = items.length - 1;
       for (let j = cells.length - 1; j >= 0 && k >= 0; j--, k--) {
         const i = cells[j];
         next[i] = items[k].v;
-        if (sp) sp[i] = items[k].s;
         fromRow[i] = items[k].r;
       }
     }
-    return { grid: next, sprout: sp, fromRow };
+    return { grid: next, fromRow };
   }
 
   /**
@@ -332,108 +333,6 @@
   }
 
   /* ---------------------------------------------------------------------
-   * MODIFIKATOREN
-   * ------------------------------------------------------------------- */
-
-  /** Welcher Modifikator-Typ gehört zu diesem Wort? (erste passende Regel aus MODIFIER_RULES) */
-  function modifierTypeFor(word) {
-    for (const rule of MODIFIER_RULES) if (rule.when(word, GEO)) return rule.type;
-    return null;
-  }
-
-  /**
-   * Gewünschtes Zielfeld für Stein/Brunnen: rechts vom letzten Buchstaben (waagerecht) bzw.
-   * darunter (senkrecht). Liegt es außerhalb des Bretts, wird auf das nächste gültige Feld
-   * geklemmt (= der letzte Buchstabe des Worts).
-   */
-  function targetCellFor(word) {
-    const end = Math.min(word.start + word.length, N - 1);
-    return word.axis === "row" ? idx(word.line, end) : idx(end, word.line);
-  }
-
-  /** Ring der Felder um das Wort, im Uhrzeigersinn ab der Ecke oben links (nur Felder im Brett). */
-  function clockwiseRing(word) {
-    const rs = word.cells.map(rowOf), cs = word.cells.map(colOf);
-    const r0 = Math.min(...rs) - 1, r1 = Math.max(...rs) + 1, c0 = Math.min(...cs) - 1, c1 = Math.max(...cs) + 1;
-    const ring = [];
-    for (let c = c0; c <= c1; c++) ring.push([r0, c]);          // oben: links -> rechts
-    for (let r = r0 + 1; r <= r1; r++) ring.push([r, c1]);      // rechts: oben -> unten
-    for (let c = c1 - 1; c >= c0; c--) ring.push([r1, c]);      // unten: rechts -> links
-    for (let r = r1 - 1; r > r0; r--) ring.push([r, c0]);       // links: unten -> oben
-    return ring.filter(([r, c]) => r >= 0 && r < N && c >= 0 && c < N).map(([r, c]) => idx(r, c));
-  }
-
-  /** Feld schon belegt (Stein, Brunnen oder Trieb-Buchstabe)? */
-  const occupied = (state, i) => state.cellMod[i] != null || state.sprout[i];
-
-  /** Nächstes freies Feld zu `from` (Manhattan-Abstand, bei Gleichstand Lesereihenfolge). */
-  function nearestFree(state, from, exclude = null) {
-    let best = null, bestD = Infinity;
-    for (let i = 0; i < N * N; i++) {
-      if (occupied(state, i) || (exclude && exclude.has(i))) continue;
-      const d = Math.abs(rowOf(i) - rowOf(from)) + Math.abs(colOf(i) - colOf(from));
-      if (d < bestD) { bestD = d; best = i; }
-    }
-    return best;
-  }
-
-  /**
-   * placeModifier – setzt EINEN Modifikator für ein Wort (Geometrie = Position VOR dem Löschen)
-   * auf das aktuelle Brett (nach Gravitation/Nachfüllen).
-   *   stein/brunnen: Zielfeld laut targetCellFor; belegt -> nächstes freies Feld
-   *   trieb:         erstes freies Feld im Uhrzeigersinn um das Wort; der Buchstabe dort wird
-   *                  durch einen seltenen Buchstaben (PRNG) ersetzt und wird zum Trieb
-   * @returns { type, cell, desired, word, letter? } oder null (kein freies Feld)
-   */
-  function placeModifier(state, type, word) {
-    if (type === "trieb") {
-      const ring = clockwiseRing(word);
-      let cell = ring.find((i) => !occupied(state, i));
-      if (cell === undefined) cell = nearestFree(state, word.cells[0], new Set(word.cells));
-      if (cell == null) return null;
-      const letter = RARE_LETTERS[Math.floor(rngNext(state.rng) * RARE_LETTERS.length)];
-      state.grid[cell] = letter;
-      state.sprout[cell] = true;
-      return { type, cell, desired: ring[0] ?? cell, word: word.word, letter };
-    }
-    const desired = targetCellFor(word);
-    const cell = occupied(state, desired) ? nearestFree(state, desired) : desired;
-    if (cell == null) return null;
-    state.cellMod[cell] = type;
-    return { type, cell, desired, word: word.word };
-  }
-
-  /** Plan: welcher Modifikator entsteht für welches Wort (nur aktive Typen). */
-  function planModifiers(state, matches) {
-    const plan = [];
-    for (const m of matches) {
-      const type = modifierTypeFor(m);
-      if (type && state.enabled[type]) plan.push({ type, word: m });
-    }
-    return plan;
-  }
-
-  /** applyModifiers – Plan einer Kaskadenstufe ausführen (in Wort-Reihenfolge). @returns Platzierungen */
-  function applyModifiers(state, plan) {
-    const placed = [];
-    for (const p of plan) {
-      const res = placeModifier(state, p.type, p.word);
-      if (res) { placed.push(res); state.created[res.type]++; }
-    }
-    return placed;
-  }
-
-  /** Aktuell sichtbare Modifikatoren zählen (für „Stein: 2 | Brunnen: 1 | Trieb: 0“). */
-  function countModifiers(state) {
-    const out = { stein: 0, brunnen: 0, trieb: 0 };
-    for (let i = 0; i < N * N; i++) {
-      if (state.cellMod[i]) out[state.cellMod[i]]++;
-      if (state.sprout[i]) out.trieb++;
-    }
-    return out;
-  }
-
-  /* ---------------------------------------------------------------------
    * PUNKTE
    * ------------------------------------------------------------------- */
 
@@ -442,20 +341,19 @@
 
   /**
    * targetScore – Punkte fürs Zielwort.
-   * Länge × POINTS_PER_LETTER × BRUNNEN_FACTOR^brunnen × (1 + COMBO_STEP × cascades) × (1 − HINT_PENALTY × hints)
+   * Länge × POINTS_PER_LETTER × (1 + COMBO_STEP × cascades) × (1 − HINT_PENALTY × hints)
    */
-  function targetScore(length, brunnen = 0, cascades = 0, hints = 0) {
+  function targetScore(length, cascades = 0, hints = 0) {
     const factor = Math.max(0, 1 - HINT_PENALTY * hints);
-    return Math.round(length * POINTS_PER_LETTER * Math.pow(BRUNNEN_FACTOR, brunnen) * (1 + COMBO_STEP * cascades) * factor);
+    return Math.round(length * POINTS_PER_LETTER * (1 + COMBO_STEP * cascades) * factor);
   }
 
   /** Level gelöst: Punkte berechnen und Zustand einfrieren. */
   function solve(state, hit, cascades) {
-    const brunnen = hit.cells.filter((i) => state.cellMod[i] === "brunnen").length;
-    const points = targetScore(hit.length, brunnen, cascades, state.hintsUsed);
+    const points = targetScore(hit.length, cascades, state.hintsUsed);
     state.solved = {
-      ...hit, brunnen, cascades, cascadeMult: 1 + COMBO_STEP * cascades,
-      brunnenMult: Math.pow(BRUNNEN_FACTOR, brunnen), hintsUsed: state.hintsUsed, points
+      ...hit, cascades, cascadeMult: 1 + COMBO_STEP * cascades,
+      hintsUsed: state.hintsUsed, points
     };
     state.levelPoints = points;
     state.score = state.baseScore + points;
@@ -467,9 +365,9 @@
    * ------------------------------------------------------------------- */
 
   /**
-   * cascade – nach einem Slide: Zielwort prüfen; sonst kurze Wörter löschen, Gravitation,
-   * Nachfüllen, Modifikatoren pflanzen – und wiederholen, bis nichts mehr passiert.
-   * Das Zielwort wird VOR jeder Löschrunde geprüft (es wird nie als kurzes Wort zerstört).
+   * cascade – nach einem Slide: Zielwort prüfen; sonst kurze Wörter löschen (nur ungeschützte
+   * Felder), Gravitation um verankerte Zielbuchstaben, Nachfüllen – und wiederholen, bis
+   * nichts mehr zerbröselt. Das Zielwort wird VOR jeder Löschrunde geprüft.
    * @returns Array von Schritten für die Animation
    */
   function cascade(state) {
@@ -481,23 +379,18 @@
         if (hit) { solve(state, hit, level); break; }
       }
       if (level >= MAX_CASCADE_LEVELS) break;
-      const matches = findShortWords(state.grid, state);
+      const protect = neededCells(state.grid, state.target);
+      const matches = findShortWords(state.grid, state).filter((m) => m.cells.some((i) => !protect.has(i)));
       if (!matches.length) break;
       level++;
-      const plan = planModifiers(state, matches);
-      const gridBefore = state.grid, cellModBefore = state.cellMod.slice(), sproutBefore = state.sprout.slice();
-      const cl = clearWords(state.grid, matches, state.cellMod, state.sprout);
-      const fallen = applyGravity(cl.grid, state.cellMod, cl.sprout);
+      const gridBefore = state.grid;
+      const cl = clearWords(state.grid, matches, protect);
+      const fallen = applyGravity(cl.grid, protect);
       const filled = refill(fallen.grid, state.rng, fallen.fromRow);
-      state.grid = filled.grid.slice();
-      state.sprout = fallen.sprout;
-      const gridFallen = filled.grid, sproutFallen = fallen.sprout.slice();
-      const placed = applyModifiers(state, plan);
+      state.grid = filled.grid;
       steps.push({
-        level, matches, plan, placed, cleared: cl.cleared, fromRow: filled.fromRow,
-        gridBefore, cellModBefore, sproutBefore,
-        gridFallen, sproutFallen,                       // nach Fallen/Nachfüllen, vor dem Pflanzen
-        gridAfter: state.grid.slice(), cellModAfter: state.cellMod.slice(), sproutAfter: state.sprout.slice()
+        level, matches, cleared: cl.cleared, fromRow: filled.fromRow,
+        gridBefore, gridFallen: filled.grid, gridAfter: state.grid.slice()
       });
     }
     state.combo = level;
@@ -517,12 +410,10 @@
 
   const levelById = (id) => LEVELS.find((l) => l.id === id) || null;
 
-  /** Brett, Zähler, Modifikatoren auf den Anfang setzen (Hinweise bleiben erhalten). */
+  /** Brett und Zähler auf den Anfang setzen (Hinweise bleiben erhalten). */
   function initBoard(state) {
     state.rng = createRng(state.seed);
     state.grid = state.level ? normalizeGrid(state.level.grid) : generateStartBoard(state.rng);
-    state.cellMod = new Array(N * N).fill(null);
-    state.sprout = new Array(N * N).fill(false);
     state.moves = 0;
     state.score = state.baseScore;
     state.levelPoints = 0;
@@ -531,7 +422,6 @@
     state.solved = null;
     state.ended = false;
     state.history = [];
-    state.created = { stein: 0, brunnen: 0, trieb: 0 };
     return state;
   }
 
@@ -545,10 +435,9 @@
   function loadLevel(ref, opts = {}) {
     const level = typeof ref === "object" && ref ? ref : levelById(Number(ref));
     if (!level) throw new Error(`Unbekanntes Level: ${ref}`);
-    const enabled = { stein: false, brunnen: false, trieb: false, ...(level.modifiersEnabled || {}) };
     const state = {
       modeId: opts.modeId || "level", level, levelCount: LEVELS.length,
-      target: level.target.toUpperCase(), hint: level.hint, enabled,
+      target: level.target.toUpperCase(), hint: level.hint,
       seed: hashString(`wortgarten:${level.id}`),
       baseScore: opts.totalScore || 0,
       hintsUsed: 0, revealed: [], hints: []
@@ -583,11 +472,10 @@
     return grid;
   }
 
-  /** Freies Spiel: Zufallsbrett, alle Modifikatoren aktiv, kein Zielwort. */
+  /** Freies Spiel: Zufallsbrett, kein Zielwort. */
   function startFree(seed) {
     const state = {
       modeId: "free", level: null, levelCount: LEVELS.length, target: null, hint: null,
-      enabled: { stein: true, brunnen: true, trieb: true },
       seed: seed != null ? seed >>> 0 : randomSeed(), baseScore: 0, hintsUsed: 0, revealed: [], hints: []
     };
     return initBoard(state);
@@ -597,31 +485,27 @@
    * ZÜGE, UNDO, RESET
    * ------------------------------------------------------------------- */
 
-  /** Snapshot: Grid, Modifikatoren, Triebe, Punkte, Züge, Combo, PRNG-Zustand. */
+  /** Snapshot: Grid, Punkte, Züge, Combo, PRNG-Zustand. */
   function takeSnapshot(state) {
     return {
-      grid: state.grid.slice(), cellMod: state.cellMod.slice(), sprout: state.sprout.slice(),
+      grid: state.grid.slice(),
       score: state.score, moves: state.moves, combo: state.combo, maxCombo: state.maxCombo,
-      created: { ...state.created }, rngState: state.rng.state
+      rngState: state.rng.state
     };
   }
 
   function restoreSnapshot(state, snap) {
     state.grid = snap.grid.slice();
-    state.cellMod = snap.cellMod.slice();
-    state.sprout = snap.sprout.slice();
     state.score = snap.score;
     state.moves = snap.moves;
     state.combo = snap.combo;
     state.maxCombo = snap.maxCombo;
-    state.created = { ...snap.created };
     state.rng.state = snap.rngState;
   }
 
   /**
-   * performSlide – EIN Zug: Snapshot, Linie verschieben (Steine bleiben), Kaskade, Zielwort-Prüfung.
-   * @returns { gridBefore, sproutBefore, cellMod, gridAfterSlide, sproutAfterSlide, steps, solved }
-   *          oder null (Level beendet oder Linie blockiert)
+   * performSlide – EIN Zug: Snapshot, Linie verschieben, Kaskade, Zielwort-Prüfung.
+   * @returns { gridBefore, gridAfterSlide, steps, solved } oder null (Level beendet)
    */
   function performSlide(state, axis, index, dir, opts = {}) {
     if (state.ended || !canSlide(state, axis, index)) return null;
@@ -629,13 +513,12 @@
       state.history.push(takeSnapshot(state));
       if (state.history.length > HISTORY_LIMIT) state.history.shift();
     }
-    const gridBefore = state.grid, sproutBefore = state.sprout, cellMod = state.cellMod.slice();
-    state.grid = slideLine(gridBefore, axis, index, dir, state.cellMod);
-    state.sprout = slideLine(sproutBefore, axis, index, dir, state.cellMod);
+    const gridBefore = state.grid;
+    state.grid = slideLine(gridBefore, axis, index, dir);
     state.moves++;
-    const gridAfterSlide = state.grid.slice(), sproutAfterSlide = state.sprout.slice();
+    const gridAfterSlide = state.grid.slice();
     const steps = cascade(state);
-    return { gridBefore, sproutBefore, cellMod, gridAfterSlide, sproutAfterSlide, steps, solved: state.solved };
+    return { gridBefore, gridAfterSlide, steps, solved: state.solved };
   }
 
   /** undo – Zustand vor dem letzten Zug exakt wiederherstellen (nicht nach dem Lösen). */
@@ -655,29 +538,12 @@
   /** Unabhängige Kopie für Simulationen (PRNG-Zustand inklusive). */
   function cloneState(state) {
     return {
-      ...state, grid: state.grid.slice(), cellMod: state.cellMod.slice(), sprout: state.sprout.slice(),
-      rng: { state: state.rng.state }, history: [], created: { ...state.created }, revealed: state.revealed.slice()
+      ...state, grid: state.grid.slice(),
+      rng: { state: state.rng.state }, history: [], revealed: state.revealed.slice()
     };
   }
 
-  /**
-   * previewModifiers – simuliert einen Zug (inkl. Kaskaden, exakt mit demselben PRNG-Strom)
-   * und liefert, welche Modifikatoren wo entstehen würden. Verändert `state` nicht.
-   * @returns { blocked, placements: [{ type, cell, word, level, letter? }], words }
-   */
-  function previewModifiers(state, axis, index, dir) {
-    if (state.ended || !canSlide(state, axis, index)) return { blocked: true, placements: [], words: [] };
-    const sim = cloneState(state);
-    const res = performSlide(sim, axis, index, dir, { record: false });
-    const placements = [], words = [];
-    for (const s of res.steps) {
-      for (const m of s.matches) words.push(m.word);
-      for (const p of s.placed) placements.push({ ...p, level: s.level });
-    }
-    return { blocked: false, placements, words };
-  }
-
-  /** Alle möglichen Züge (Linie × Richtung), die gerade erlaubt sind. */
+  /** Alle möglichen Züge (Linie × Richtung). */
   function allMoves(state) {
     const moves = [];
     for (const axis of ["row", "col"]) for (let i = 0; i < N; i++) {
@@ -685,16 +551,6 @@
       moves.push({ axis, index: i, dir: -1 }, { axis, index: i, dir: 1 });
     }
     return moves;
-  }
-
-  /** „Was passiert, wenn?“ – alle Züge, die JETZT Modifikatoren erzeugen würden. */
-  function whatIf(state) {
-    const out = [];
-    for (const mv of allMoves(state)) {
-      const p = previewModifiers(state, mv.axis, mv.index, mv.dir);
-      if (p.placements.length) out.push({ ...mv, ...p });
-    }
-    return out;
   }
 
   /* ---------------------------------------------------------------------
@@ -759,10 +615,7 @@
   function buildShareText(state) {
     const tag = MODES[state.modeId].shareTag(state);
     const moves = `${state.moves} ${state.moves === 1 ? "Zug" : "Züge"}`;
-    if (state.modeId === "free") {
-      const c = state.created;
-      return `Wortgarten ${tag} · ${moves} · Stein ${c.stein} · Brunnen ${c.brunnen} · Trieb ${c.trieb}`;
-    }
+    if (state.modeId === "free") return `Wortgarten ${tag} · ${moves}`;
     return `Wortgarten ${tag} · ${state.levelPoints} Punkte · ${moves}`;
   }
 
@@ -793,14 +646,13 @@
   }
 
   const api = {
-    CONFIG, LEVELS, GRID_SIZE, MODES, MOD_TYPES, HISTORY_LIMIT, WORD_LIST, DICTIONARY, LINES, GEO,
+    CONFIG, LEVELS, GRID_SIZE, MODES, HISTORY_LIMIT, WORD_LIST, DICTIONARY, LINES, GEO,
     parseWordList, createRng, rngNext, hashString, randomSeed, formatDateKey, dailyPuzzleNumber, drawLetter,
-    idx, rowOf, colOf, isCenter, lineCells, movableCells, canSlide, slideLine,
+    idx, rowOf, colOf, lineCells, movableCells, canSlide, slideLine,
     findWords, checkBoard, findShortWords, checkTargetWord, clearWords, applyGravity, refill,
-    modifierTypeFor, targetCellFor, clockwiseRing, placeModifier, planModifiers, applyModifiers, countModifiers,
     comboMultiplier, targetScore, cascade, normalizeGrid, levelById, loadLevel, nextLevel, dailyLevelIndex,
     startDaily, startFree, generateStartBoard, takeSnapshot, restoreSnapshot, performSlide, undo, reset,
-    cloneState, previewModifiers, allMoves, whatIf, bestAlignment, bestPartialRun, protectedCells, useHint, buildShareText, validateLevel
+    cloneState, allMoves, bestAlignment, bestPartialRun, neededCells, protectedCells, useHint, buildShareText, validateLevel
   };
 
   if (IS_NODE) module.exports = api;

@@ -37,7 +37,6 @@
     <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.6 2.3c-.8.4-1.2 1-1.2 1.8v.4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><circle cx="12" cy="17.2" r="1.4" fill="currentColor"/></symbol>
     <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
     <symbol id="i-infinity" viewBox="0 0 24 24"><path d="M12 12c-2-2.6-3.6-4-5.5-4a4 4 0 0 0 0 8c1.9 0 3.5-1.4 5.5-4zm0 0c2 2.6 3.6 4 5.5 4a4 4 0 0 0 0-8c-1.9 0-3.5 1.4-5.5 4z" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/></symbol>
-    <!-- Modifikatoren (Stein, Brunnen, Trieb) und neue Buttons -->
     <symbol id="i-stone" viewBox="0 0 24 24"><path d="M5.5 17.5c-1.6-.4-2.4-2-1.8-3.6l1.7-4.6c.5-1.4 1.7-2.4 3.2-2.6l4.6-.6c1.7-.2 3.3.6 4.2 2l2 3.3c1.1 1.8.6 4.1-1.1 5.3-1.2.9-2.7 1.3-4.2 1.3H8.3c-1 0-1.9-.1-2.8-.5z" fill="#B8B0A6" stroke="#8E857B" stroke-width="1.4" stroke-linejoin="round"/><path d="M8.5 10.5l2.5-.6M13.5 13.5l2.3.8" stroke="#E4DED6" stroke-width="1.4" stroke-linecap="round"/></symbol>
     <symbol id="i-drop" viewBox="0 0 24 24"><path d="M12 3.2c3.3 4.2 6 7.4 6 10.6a6 6 0 0 1-12 0c0-3.2 2.7-6.4 6-10.6z" fill="#7FB8E6" stroke="#4E8FC6" stroke-width="1.4" stroke-linejoin="round"/><path d="M9.3 14.2a2.8 2.8 0 0 0 2.4 2.7" fill="none" stroke="#E3F1FC" stroke-width="1.6" stroke-linecap="round"/></symbol>
     <symbol id="i-sprout" viewBox="0 0 24 24"><path d="M12 21v-8.5" stroke="#6FA85A" stroke-width="2.2" stroke-linecap="round"/><path d="M12 13.5C11.6 9.6 8.6 7.4 4.6 7.6c.2 3.9 3.2 6.2 7.4 5.9z" fill="#9CD27F" stroke="#6FA85A" stroke-width="1.3" stroke-linejoin="round"/><path d="M12 11.5c.4-3.6 3.3-5.8 7.2-5.6-.2 3.7-3.1 5.9-7.2 5.6z" fill="#B5E09A" stroke="#6FA85A" stroke-width="1.3" stroke-linejoin="round"/></symbol>
@@ -76,7 +75,7 @@
     </button>
     <button type="button" id="start-free" class="pill pill-lavender pill-mid">
       <svg class="ic" aria-hidden="true"><use href="#i-infinity"/></svg>
-      <span class="stack"><span class="main">Freies Spiel</span><span class="sub">Zufallsbrett · Modifikatoren ausprobieren</span></span>
+      <span class="stack"><span class="main">Freies Spiel</span><span class="sub">Zufallsbrett · kurze Wörter zerbröseln</span></span>
     </button>
     <div class="start-row">
       <button type="button" id="start-howto" class="pill pill-cream"><svg class="ic" aria-hidden="true"><use href="#i-help"/></svg><span>So geht's</span></button>
@@ -102,7 +101,6 @@
 <nav class="menu" aria-label="Menü">
   <button type="button" id="btn-menu" class="pill pill-lavender pill-sm" aria-label="Menü"><svg class="ic"><use href="#i-home"/></svg><span>Menü</span></button>
   <button type="button" id="btn-howto" class="pill pill-cream pill-sm pill-icon" aria-label="So geht's"><svg class="ic"><use href="#i-help"/></svg></button>
-  <button type="button" id="btn-whatif" class="pill pill-cream pill-sm" aria-label="Was passiert, wenn?"><svg class="ic"><use href="#i-search"/></svg><span>Was passiert?</span></button>
   <button type="button" id="btn-share" class="pill pill-cream pill-sm pill-icon" aria-label="Teilen"><svg class="ic"><use href="#i-share"/></svg></button>
   <button type="button" id="btn-mute" class="pill pill-cream pill-sm pill-icon btn-mute" aria-label="Ton aus"><svg class="ic"><use href="#i-sound"/></svg></button>
 </nav>
@@ -119,12 +117,6 @@
 <div id="target" class="target-card" aria-live="polite">
   <div class="target-top"><span class="label">ZIELWORT</span><span id="target-hint" class="target-hint">–</span></div>
   <div id="target-slots" class="target-slots" aria-label="Zielwort"></div>
-  <!-- Aktive Modifikatoren: „Stein: 2 | Brunnen: 1 | Trieb: 0“ -->
-  <div id="modstatus" class="modstatus" aria-label="Modifikatoren">
-    <span class="mod-chip" data-type="stein"><svg aria-hidden="true"><use href="#i-stone"/></svg>Stein: <b id="count-stein">0</b></span><i class="sep">|</i>
-    <span class="mod-chip" data-type="brunnen"><svg aria-hidden="true"><use href="#i-drop"/></svg>Brunnen: <b id="count-brunnen">0</b></span><i class="sep">|</i>
-    <span class="mod-chip" data-type="trieb"><svg aria-hidden="true"><use href="#i-sprout"/></svg>Trieb: <b id="count-trieb">0</b></span>
-  </div>
   <div id="hint-line" class="hint-line" hidden></div>
 </div>
 
@@ -144,12 +136,11 @@
   <button type="button" id="btn-undo" class="pill pill-mint" aria-label="Rückgängig"><svg class="ic"><use href="#i-undo"/></svg><span>Undo</span></button>
   <button type="button" id="btn-reset" class="pill pill-peach"><svg class="ic"><use href="#i-reset"/></svg><span>Reset</span></button>
   <button type="button" id="btn-hint" class="pill pill-lavender" aria-label="Hinweis"><svg class="ic"><use href="#i-bulb"/></svg><span>Hinweis <b id="hint-count" class="count">3</b></span></button>
-  <button type="button" id="btn-preview" class="pill pill-cream toggle" aria-pressed="true" aria-label="Vorschau an/aus" title="Vorschau: Modifikator-Felder vor dem Zug aufblitzen lassen"><svg class="ic"><use href="#i-eye"/></svg><span class="lbl">Vorschau</span></button>
 </div>
 
 <p class="help">
   Wische eine Zeile oder Spalte (oder tippe die Pfeile am Rand). Bilde das Zielwort waagerecht oder
-  senkrecht. Kurze Wörter (3–5) zerbröseln und pflanzen Steine, Brunnen und Triebe.
+  senkrecht. Kurze Wörter (3–5) zerbröseln; Zielwort-Buchstaben bleiben liegen.
   Tastatur: Shift+Pfeile wählt, Pfeile schieben, Strg+Z = Undo.
 </p>
 

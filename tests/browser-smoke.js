@@ -1,8 +1,8 @@
 // Optionaler Browser-Smoke-Test für Wortgarten (braucht lokales Chrome + puppeteer-core, NICHT Teil von `npm test`/CI).
 //   npm i --no-save puppeteer-core   (oder PUPPETEER_CORE=/pfad/zu/puppeteer-core)
 //   CHROME_PATH=/usr/bin/google-chrome SCREENSHOTS=/tmp/shots npm run test:browser
-// Prüft: Startseite, Level 1 per UI lösen (Pfeil + Wischgeste), Level-Abschluss-Dialog, Hinweis, „Was passiert?“,
-// Vorschau-Aufblitzen, Modifikator-Optik, Fortschritt in localStorage, Design-Variablen, iPhone-14-Layout, keine JS-Fehler.
+// Prüft: Startseite, Level 1 per UI lösen (Pfeil + Wischgeste), Level-Abschluss-Dialog, Hinweis,
+// Schutz-Markierung, Fortschritt in localStorage, Design-Variablen, iPhone-14-Layout, Lehr-Level, keine JS-Fehler.
 "use strict";
 const path = require("path");
 const puppeteer = require(process.env.PUPPETEER_CORE || "puppeteer-core");
@@ -78,7 +78,7 @@ const arrowSel = (mv) => { const m = /^([RC])([1-6])([+-])$/.exec(mv); return `b
 async function designCheck(page) {
   const d = await page.evaluate(() => {
     const root = getComputedStyle(document.documentElement);
-    const face = document.querySelector("#board .tile:not([class*='mod-']) .face");
+    const face = document.querySelector("#board .tile:not(.protected) .face") || document.querySelector("#board .tile .face");
     const fs = face && getComputedStyle(face);
     const pill = getComputedStyle(document.querySelector("#controls .pill"));
     return {
@@ -94,12 +94,6 @@ async function designCheck(page) {
   ok(/ui-rounded|Nunito/.test(d.pillFont), "gleiche runde Schrift");
 }
 
-/** Greift einen Zug aus der „Was passiert?“-Liste (optional bevorzugt mit fehlendem Typ). */
-const pickModMove = (page, want) => page.evaluate((want) => {
-  const list = LetterSlideLogic.whatIf(LetterSlideApp.game);
-  return list.find((m) => m.placements.some((p) => want.includes(p.type))) || list[0] || null;
-}, want);
-
 async function desktop(browser) {
   console.log("Desktop (1280×900, file://)");
   const { page, errors } = await openPage(browser);
@@ -110,7 +104,7 @@ async function desktop(browser) {
   ok(!!(await page.$("#start-free")), "Freies Spiel");
   await page.click("#start-howto"); await waitModal(page, /So geht/);
   const how = await page.$eval("#modal-body", (e) => e.textContent);
-  ok(/Stein/.test(how) && /Brunnen/.test(how) && /Trieb/.test(how) && /Vorschau/.test(how), "„So geht's“ erklärt Modifikatoren + Vorschau");
+  ok(/Zielwort/.test(how) && /zerbröseln nie/.test(how) && /Kaskade/.test(how), "„So geht's“ erklärt Zielwort, Schutz und Punkte");
   await answer(page, "ok");
 
   await page.click("#start-level"); await waitScreen(page, "game");
@@ -119,14 +113,11 @@ async function desktop(browser) {
   ok((await page.$eval("#stat-mode", (e) => e.textContent)) === "Level 1 von 12", "Kopfzeile „Level 1 von 12“");
   ok((await page.$$("#target-slots .slot")).length === 6, "6 Ziel-Slots _ _ _ _ _ _");
   ok(/Warmes/.test(await page.$eval("#target-hint", (e) => e.textContent)), "Hinweistext „etwas Warmes“");
-  ok(/Stein:\s*0.*Brunnen:\s*0.*Trieb:\s*0/s.test(await page.$eval("#modstatus", (e) => e.textContent)), "Modifikator-Status „Stein: 0 | Brunnen: 0 | Trieb: 0“");
   await designCheck(page);
   const pc = await protectCheck(page);
-  ok(pc.want.length === 5 && JSON.stringify(pc.want) === JSON.stringify(pc.have), `Fortschritt WAERM (5 Felder) dezent markiert: ${pc.have.join(",")}`);
+  ok(pc.want.length === 6 && JSON.stringify(pc.want) === JSON.stringify(pc.have), `alle 6 Zielbuchstaben dezent markiert: ${pc.have.join(",")}`);
   ok(await page.$eval("#board .tile.protected .face", (f) => getComputedStyle(f, "::after").content !== "none"), "Unterstrich an geschützten Kacheln");
 
-  // „Was passiert?“
-  await page.click("#btn-whatif"); await waitModal(page, /Was passiert/); ok(true, "„Was passiert?“-Dialog"); await answer(page, "ok");
   // Hinweis (mit Rückfrage)
   await page.click("#btn-hint"); await waitModal(page, /Hinweis nehmen/); await page.click('#modal-actions button[data-value="ok"]');
   await waitModal(page, /Hinweis 1\/3/);
@@ -192,55 +183,22 @@ async function iphone(browser) {
   await answer(page, "menu", true).catch(() => {});
   if (await page.evaluate(() => LetterSlideApp.modalOpen)) await answer(page, "next", true);
 
-  // Vorschau-Aufblitzen (Level 4: Stein)
+  // Level 4: Zielbuchstaben sind markiert, ein Zug und Undo funktionieren ohne Modifikatoren
   await page.evaluate(() => LetterSlideApp.startLevel(4)); await waitScreen(page, "game");
-  await waitModal(page, /Stein/); await answer(page, "ok", true);
-  ok(await page.$eval("#count-stein", (e) => !e.closest(".mod-chip").classList.contains("off")), "Level 4: Stein-Zähler aktiv");
-  ok(await page.$eval("#count-brunnen", (e) => e.closest(".mod-chip").classList.contains("off")), "Level 4: Brunnen-Zähler ausgegraut");
-  await sleep(900); // Brett-Intro abwarten
-  const mv = await pickModMove(page, ["stein"]);
-  ok(!!mv, "es gibt einen Zug, der einen Stein pflanzt");
-  await page.evaluate((m) => { LetterSlideApp.handleSlide(m.axis, m.index, m.dir); }, mv);
-  await page.waitForSelector("#board .tile.preview", { timeout: 3000 }).then(() => ok(true, "Vorschau blitzt gelb auf"), () => ok(false, "Vorschau blitzt gelb auf"));
-  await sleep(220);
-  await shot(page, "preview.png");
-  ok(await page.$eval("#board .tile.preview", (e) => e.classList.contains("p-stein") && !!e.querySelector(".preview-ic")), "Vorschau zeigt Stein-Icon");
-  await page.waitForFunction(() => !LetterSlideApp.busy || LetterSlideApp.modalOpen, { timeout: 20000 });
-  await idle(page);
+  await sleep(400);
   await dismissTips(page, true);
   const pc4 = await protectCheck(page);
-  ok(JSON.stringify(pc4.want) === JSON.stringify(pc4.have), "Level 4: Markierung = geschützte Felder der Logik");
-  ok((await page.$$("#board .tile.mod-stein")).length >= 1, "Stein-Kachel liegt auf dem Brett");
-  ok(Number(await page.$eval("#count-stein", (e) => e.textContent)) >= 1, "Stein-Zähler erhöht");
-  // Undo stellt den Modifikator-Zustand wieder her
+  ok(pc4.want.length === 5 && JSON.stringify(pc4.want) === JSON.stringify(pc4.have), "Level 4: Markierung = benötigte Zielbuchstaben der Logik");
+  ok((await page.$$("#board .tile.protected")).length === 5, "Level 4: 5 Zielbuchstaben (BLUME) lila markiert");
+  await page.tap(arrowSel("C1+"));
+  await idle(page);
+  await dismissTips(page, true);
+  const after = await page.evaluate(() => LetterSlideApp.game.moves);
+  ok(after === 1, "Level 4: Zug ausgeführt");
   await page.tap("#btn-undo"); await idle(page);
-  ok((await page.$$("#board .tile.mod-stein")).length === 0, "Undo entfernt den gepflanzten Stein wieder");
-
-  // Brett mit allen drei Modifikatortypen (Freies Spiel, echte Züge)
-  await page.tap("#btn-menu").catch(() => {});
-  await waitModal(page, /verlassen/).then(() => answer(page, "ok", true), () => {});
-  await waitScreen(page, "start");
-  await page.evaluate(() => { LetterSlideApp.stats.prefs.preview = false; });
-  await page.evaluate(() => LetterSlideApp.startFree(20261122)); await waitScreen(page, "game");
-  for (let k = 0; k < 40; k++) {
-    const have = await page.evaluate(() => LetterSlideLogic.countModifiers(LetterSlideApp.game));
-    const missing = ["stein", "brunnen", "trieb"].filter((t) => !have[t]);
-    if (!missing.length) break;
-    let m = await pickModMove(page, missing);
-    if (!m) m = { axis: k % 2 ? "row" : "col", index: k % 6, dir: k % 3 ? 1 : -1 };
-    await page.evaluate((m) => LetterSlideApp.handleSlide(m.axis, m.index, m.dir), m);
-    await idle(page);
-  }
-  const vis = await page.evaluate(() => {
-    const one = (t) => { const e = document.querySelector(`#board .tile.mod-${t} .face`); if (!e) return null; const s = getComputedStyle(e); return { bg: s.backgroundImage, ic: !!e.querySelector(".mod-ic") }; };
-    return { stein: one("stein"), brunnen: one("brunnen"), trieb: one("trieb"), status: document.getElementById("modstatus").textContent };
-  });
-  ok(vis.stein && vis.stein.ic, "Stein: graue Kachel mit Stein-Icon");
-  ok(vis.brunnen && vis.brunnen.ic && /url\(/.test(vis.brunnen.bg), "Brunnen: blaue Kachel mit Wellenmuster + Tropfen");
-  ok(vis.trieb && vis.trieb.ic && /url\(/.test(vis.trieb.bg), "Trieb: grüne Kachel mit Sprossenmuster + Blatt");
-  ok(/Stein:\s*[1-9].*Brunnen:\s*[1-9].*Trieb:\s*[1-9]/s.test(vis.status), "Status zählt alle drei: " + vis.status.replace(/\s+/g, " ").trim());
+  ok((await page.evaluate(() => LetterSlideApp.game.moves)) === 0, "Undo stellt den Zug zurück");
   await sleep(300);
-  await shot(page, "modifiers.png");
+  await shot(page, "level4.png");
   ok(errors.length === 0, "keine JS-Fehler" + (errors.length ? ": " + errors.join(" | ") : ""));
   await page.close();
 }
@@ -307,7 +265,7 @@ async function iphoneTutorial(browser) {
   await page.tap(arrowSel("R1+"));
   await waitCoach(page, /zerbröseln/);
   ok(/[A-Z]{3}/.test((await coachInfo(page)).text), "L2: kurze Wörter des Zugs werden genannt: " + (await coachInfo(page)).text.match(/\(([^)]*)\)/)?.[1]);
-  await coachNext(page); await waitCoach(page, /geschützt/);
+  await coachNext(page); await waitCoach(page, /zerbröseln nie/);
   ok((await page.$$("#board .tile.protected.coach-focus")).length >= 2, "L2: geschützte (lila) Kacheln hervorgehoben");
   ok((await page.$$("#target-slots .slot.ghost")).length >= 2, "L2: Fortschritt als Geister-Buchstaben in den Slots");
   // Überspringen
@@ -330,32 +288,6 @@ async function iphoneTutorial(browser) {
   await page.tap("#btn-howto"); await waitModal(page, /So geht/);
   ok(!!(await page.$('#modal-actions button[data-value="tutorial"]')), "„So geht's“ bietet „Tutorial wiederholen“");
   await answer(page, "ok", true);
-
-  // Level 4: erster Stein geführt
-  await page.evaluate(() => LetterSlideApp.startLevel(4));
-  await waitCoach(page, /Steine/);
-  await coachNext(page); await waitCoach(page, /Auge/);
-  ok((await coachInfo(page)).pulse.includes("btn-preview"), "L4: Vorschau-Auge hervorgehoben");
-  await coachNext(page); await waitCoach(page, /Spalte 1 nach unten/);
-  await page.tap(arrowSel("C1+"));
-  await waitCoach(page, /Zeile 2 nach links/);
-  await page.tap(arrowSel("R2-"));
-  await page.waitForSelector("#board .tile.preview", { timeout: 3000 }).then(() => ok(true, "L4: Vorschau blitzt beim geführten Zug"), () => ok(false, "L4: Vorschau blitzt beim geführten Zug"));
-  await waitCoach(page, /Ein Stein/);
-  c = await coachInfo(page);
-  ok((await page.$$("#board .tile.mod-stein.coach-focus")).length === 1 && c.inView, "L4: Coach-Karte zeigt auf den neuen Stein");
-  ok(!(await page.evaluate(() => LetterSlideApp.modalOpen)), "kein doppeltes „Ein Stein!“-Popup");
-  await sleep(300);
-  await shotAs(page, "tutorial-l4-stone.png");
-  await coachNext(page); await waitCoach(page, /Was passiert/);
-  await page.tap("#btn-undo"); await sleep(100);
-  ok((await page.evaluate(() => LetterSlideApp.game.moves)) === 2, "L4: Undo im Tutorial blockiert");
-  await page.tap("#btn-whatif"); await waitModal(page, /Was passiert/);
-  await answer(page, "ok", true);
-  await waitCoach(page, /Jetzt du/);
-  await coachNext(page);
-  ok(!(await coachInfo(page)).on, "L4: danach freies Spiel");
-  ok(await page.evaluate(() => JSON.parse(localStorage.getItem("wortgartenStats.v1")).tutorial.done["4"] === true), "L4 als geführt gespeichert");
   ok(errors.length === 0, "keine JS-Fehler" + (errors.length ? ": " + errors.join(" | ") : ""));
   await page.close();
 }

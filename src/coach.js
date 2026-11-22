@@ -145,10 +145,6 @@
       if (name === "center") return [...tile(2, 2), ...tile(2, 3), ...tile(3, 2), ...tile(3, 3)];
       if (name === "protected") return $("#board .tile.protected");
       if (name.startsWith("btn:")) return $(`#btn-${name.slice(4)}`);
-      if (name.startsWith("mod:")) {
-        const t = name.slice(4);
-        return t === "trieb" ? $("#board .tile.sprout, #board .tile.mod-trieb").slice(0, 1) : $(`#board .tile.mod-${t}`).slice(0, 1);
-      }
       if (name.startsWith("row:")) return $(`#board .tile[data-r="${name.slice(4)}"]`);
       if (name.startsWith("col:")) return $(`#board .tile[data-c="${name.slice(4)}"]`);
       if (name.startsWith("tile:")) { const [r, c] = name.slice(5).split(",").map(Number); return tile(r, c); }

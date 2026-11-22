@@ -1,8 +1,8 @@
 /*
  * Wortgarten – LEVEL-WERKZEUGE (Node, nicht Teil des Spiels)
  * ==========================================================
- * Löser für Level unter den ECHTEN Spielregeln (logic.js: Steine, Kaskaden, PRNG-Nachfüllen,
- * Modifikatoren). Wird von tests/levels.test.js und tools/solve-level.js benutzt.
+ * Löser für Level unter den ECHTEN Spielregeln (logic.js: Kaskaden, Schutz, PRNG-Nachfüllen).
+ * Wird von tests/levels.test.js und tools/solve-level.js benutzt.
  *
  *   replay(level, moves)           Referenzlösung abspielen -> Endzustand
  *   minSolution(level, maxDepth)   kürzeste Lösung per iterativer Tiefensuche (exakt, exhaustiv)
@@ -19,7 +19,7 @@ const decode = (s) => {
   if (!m) throw new Error(`Ungültiger Zug: ${s}`);
   return { axis: m[1] === "R" ? "row" : "col", index: Number(m[2]) - 1, dir: m[3] === "+" ? 1 : -1 };
 };
-const keyOf = (s) => s.grid.join("") + s.cellMod.map((x) => (x ? x[0] : ".")).join("") + s.sprout.map((x) => (x ? 1 : 0)).join("") + s.rng.state;
+const keyOf = (s) => s.grid.join("") + s.rng.state;
 const isInverse = (a, b) => a && b && a.axis === b.axis && a.index === b.index && a.dir === -b.dir;
 
 /** Referenzlösung abspielen. @returns { state, log: [{ move, placed, words, solved }] } */
@@ -32,7 +32,7 @@ function replay(level, moves, startState = null) {
     if (!res) { log.push({ move: s, blocked: true }); break; }
     log.push({
       move: s, words: res.steps.flatMap((st) => st.matches.map((m) => m.word)),
-      placed: res.steps.flatMap((st) => st.placed), solved: !!state.solved
+      solved: !!state.solved
     });
     if (state.solved) break;
   }
