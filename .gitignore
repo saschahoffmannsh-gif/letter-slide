@@ -1,0 +1,10 @@
+node_modules/
+package-lock.json
+# Screenshots/Artefakte aus dem Browser-Test
+screenshots/
+*.png
+# Original-Spec liegt als docs/SPEC.md im Repo
+spec.txt
+.DS_Store
+*.log
+.github/

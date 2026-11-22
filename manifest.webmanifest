@@ -1,0 +1,20 @@
+{
+  "name": "Letter Slide",
+  "short_name": "Letter Slide",
+  "description": "Deutsches Wort-Schiebepuzzle (Prototyp)",
+  "lang": "de",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f6f5f2",
+  "theme_color": "#f6f5f2",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='96' fill='%23f6f5f2'/%3E%3Crect x='96' y='96' width='320' height='320' rx='48' fill='%23e2e2e2'/%3E%3Ctext x='256' y='330' font-family='Arial,sans-serif' font-size='240' font-weight='800' text-anchor='middle' fill='%231d1d1d'%3ELS%3C/text%3E%3C/svg%3E",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

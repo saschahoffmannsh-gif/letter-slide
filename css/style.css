@@ -1,0 +1,181 @@
+/*
+ * Letter Slide – Platzhalter-Optik
+ * Mobil zuerst (iPhone hochkant ~375–430 px), skaliert bis Desktop.
+ * Touch: Mindestgröße 44 px für alle Bedienelemente, keine Doppeltipp-Zoom,
+ * keine Textauswahl, kein Tap-Highlight, kein Overscroll-Bounce.
+ */
+:root {
+  --arrow: 44px;                 /* Breite/Höhe der Pfeil-Leisten (Touch-Ziel >= 44 px) */
+  --pad-x: 8px;
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  /* Brett: so breit wie möglich (Platz für Pfeile + Ränder), aber passt auch in die Höhe */
+  --board: max(264px, min(440px,
+    calc(100vw - 2 * var(--arrow) - 2 * var(--pad-x) - var(--safe-l) - var(--safe-r)),
+    calc(100vh - 310px - var(--safe-t) - var(--safe-b))));
+  --bg: #f6f5f2;
+  --ink: #222;
+  --tile: #e2e2e2;
+  --tile-ink: #1d1d1d;
+  --accent: #3b6fd8;
+  --hit: #ffd400;
+}
+@supports (height: 100dvh) {
+  :root {
+    --board: max(264px, min(440px,
+      calc(100vw - 2 * var(--arrow) - 2 * var(--pad-x) - var(--safe-l) - var(--safe-r)),
+      calc(100dvh - 310px - var(--safe-t) - var(--safe-b))));
+  }
+}
+
+* { box-sizing: border-box; }
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  touch-action: manipulation;        /* kein Doppeltipp-Zoom */
+  overscroll-behavior: none;         /* kein Bounce / Pull-to-Refresh */
+  background: var(--bg);
+}
+body {
+  margin: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: max(10px, var(--safe-t)) max(var(--pad-x), var(--safe-r)) max(20px, var(--safe-b)) max(var(--pad-x), var(--safe-l));
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  overscroll-behavior: none;
+  -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+h1 { margin: 0; font-size: 1.5rem; letter-spacing: .04em; }
+
+button {
+  font: inherit; border: 0; border-radius: 10px; cursor: pointer;
+  background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.18);
+  min-height: 44px; min-width: 44px; padding: 8px 14px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+@media (hover: hover) { button:hover:not(:disabled) { background: #eef2fb; } }
+button:active:not(:disabled) { transform: translateY(1px); filter: brightness(.95); }
+button:disabled { opacity: .45; cursor: default; }
+button.active { background: var(--accent); color: #fff; }
+
+.row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; align-items: center; }
+
+/* HUD */
+#hud { display: grid; grid-template-columns: repeat(4, auto); gap: 6px; }
+.stat { background: #fff; border-radius: 8px; padding: 6px 12px; text-align: center;
+        box-shadow: 0 1px 3px rgba(0,0,0,.12); min-width: 72px; }
+.stat .label { font-size: .7rem; text-transform: uppercase; opacity: .6; letter-spacing: .05em; }
+.stat .value { font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+#stat-combo { transition: background-color .2s, color .2s, transform .15s; }
+#stat-combo.bump { transform: scale(1.15); }
+#top { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+
+/* Schmale Displays (iPhone hochkant): alles kompakter, damit Brett + Buttons ohne Scrollen passen */
+@media (max-width: 480px) {
+  body { gap: 8px; }
+  #top { flex-direction: row; flex-wrap: wrap; justify-content: space-between; width: 100%; gap: 6px; }
+  h1 { font-size: 1.15rem; }
+  #mode-buttons { gap: 6px; }
+  #mode-buttons button { padding: 6px 12px; font-size: .95rem; }
+  #hud { grid-template-columns: 1.6fr 1fr 1fr 1fr; width: 100%; gap: 4px; }
+  .stat { padding: 3px 4px; min-width: 0; }
+  .stat .label { font-size: .62rem; }
+  .stat .value { font-size: 1rem; }
+  .stat-mode .value { font-size: .8rem; line-height: 1.25rem; overflow: hidden; text-overflow: ellipsis; }
+  #controls { gap: 6px; }
+  #controls button { padding: 6px 10px; font-size: .92rem; }
+  .help { font-size: .72rem; }
+}
+
+/* Spielfeld: 3x3-Raster aus Pfeil-Leisten und Brett */
+#playfield {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--arrow) var(--board) var(--arrow);
+  grid-template-rows: var(--arrow) var(--board) var(--arrow);
+}
+.arrows { display: grid; }
+.arrows.h { grid-template-columns: repeat(6, 1fr); }
+.arrows.v { grid-template-rows: repeat(6, 1fr); }
+/* Pfeil-Buttons füllen ihre Zelle komplett (großes Touch-Ziel), sichtbar ist nur der Innenteil */
+.arrows button.arrow {
+  width: 100%; height: 100%; min-width: 0; min-height: 0; margin: 0; padding: 4px;
+  font-size: .95rem; color: #555;
+  background: transparent; box-shadow: none; border-radius: 12px;
+  background-image: linear-gradient(#fff, #fff);
+  background-clip: content-box; background-origin: content-box;
+}
+.arrows button.arrow:active:not(:disabled) { background-image: linear-gradient(#d6dff3, #d6dff3); }
+#arrows-top { grid-area: 1 / 2; } #arrows-bottom { grid-area: 3 / 2; }
+#arrows-left { grid-area: 2 / 1; } #arrows-right { grid-area: 2 / 3; }
+
+#board {
+  grid-area: 2 / 2;
+  position: relative; width: var(--board); height: var(--board);
+  background: #cfcfcf; border-radius: 10px;
+  overflow: hidden;           /* clippt rein-/rausgleitende Kacheln */
+  touch-action: none;         /* Wischgesten gehören dem Spiel, nicht dem Scrollen */
+  -webkit-user-select: none; user-select: none;
+}
+/* Jede Kachel ist exakt eine Zelle groß -> translate(100%) = genau ein Feld */
+.tile {
+  position: absolute; width: calc(100% / 6); height: calc(100% / 6);
+  padding: 3px; will-change: transform;
+}
+.tile .face {
+  width: 100%; height: 100%; border-radius: 7px; background: var(--tile); color: var(--tile-ink);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: calc(var(--board) / 6 * .55);
+  box-shadow: inset 0 -3px 0 rgba(0,0,0,.12);
+  transition: background-color .12s, transform .18s, opacity .18s;
+  cursor: pointer;
+}
+.tile.sel-line .face { background: #d6dff3; }
+.tile.sel .face { background: #b9c9ee; outline: 2px solid var(--accent); outline-offset: -2px; }
+.tile.hit .face { background: var(--hit); box-shadow: 0 0 14px 4px rgba(255,212,0,.9); transform: scale(1.06); }
+.tile.vanish .face { opacity: 0; transform: scale(.25); }
+
+/* Wort-Einblendung und Combo-Pop über dem Brett */
+#word-flash {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; pointer-events: none;
+  font-weight: 900; color: #111; text-shadow: 0 2px 0 #fff, 0 0 18px #fff;
+  opacity: 0; transform: scale(.7); transition: opacity .15s, transform .2s;
+}
+#word-flash.show { opacity: 1; transform: scale(1); }
+#word-flash .words { font-size: clamp(1.6rem, 9vw, 3.2rem); letter-spacing: .06em; text-align: center; }
+#word-flash .pts { font-size: 1.3rem; }
+#combo-pop {
+  position: absolute; top: calc(var(--arrow) + 8px); left: 50%; pointer-events: none;
+  transform: translateX(-50%) scale(.5); opacity: 0;
+  background: #ff7a00; color: #fff; font-weight: 900; padding: 4px 12px; border-radius: 999px;
+  transition: transform .18s cubic-bezier(.3,1.8,.5,1), opacity .18s;
+}
+#combo-pop.show { transform: translateX(-50%) scale(1); opacity: 1; }
+
+#ended-overlay {
+  grid-area: 2 / 2; z-index: 2; display: none; border-radius: 10px;
+  background: rgba(255,255,255,.82); flex-direction: column; align-items: center; justify-content: center;
+  gap: 6px; text-align: center; font-size: 1.1rem;
+}
+#ended-overlay.show { display: flex; }
+#ended-overlay strong { font-size: 1.6rem; }
+
+#controls button { padding: 8px 12px; }
+#share-panel { display: none; flex-direction: column; gap: 6px; align-items: center; width: min(520px, 100%); }
+#share-panel.show { display: flex; }
+#share-text {
+  width: 100%; font: inherit; font-size: 16px; /* >= 16px: iOS zoomt beim Fokussieren nicht */
+  padding: 8px; border-radius: 8px; border: 1px solid #ccc; resize: none;
+  -webkit-user-select: text; user-select: text;
+}
+#share-status { font-size: .85rem; min-height: 1.1em; opacity: .75; }
+.help { font-size: .8rem; opacity: .65; max-width: 520px; text-align: center; margin: 0; }
