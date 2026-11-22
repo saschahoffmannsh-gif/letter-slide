@@ -86,28 +86,36 @@ nur ohne Speichern.
 
 Bei einem Treffer leuchten die Kacheln kurz golden, dann lösen sie sich **von oben nach unten**
 auf (`src/particles.js`). Die DOM-Kachel wird ausgeblendet und auf einer Vollbild-`<canvas>`
-(pointer-events: none, devicePixelRatio-scharf) weitergezeichnet. Eine waagerechte Front läuft in
-~460 ms (ease-in-out) von der Oberkante bis zur Unterkante:
+(pointer-events: none) weitergezeichnet. Eine waagerechte Front läuft in ~550 ms (ease-in-out)
+von der Oberkante bis zur Unterkante:
 
-- oberhalb der Front lösen sich Körner (weiß, hellgrau, dunkelbraune Buchstaben-Körner, ein paar
-  goldene Funken), fallen mit Schwerkraft, leichtem Seitendrift und Luftwiderstand und blenden aus;
+- jede Kachel zerfällt in ~850–900 Körner (1–2,5 px, ein paar 3 px): weiß, hellgrau, warmgrau,
+  viele dunkelbraune Buchstaben-Körner und goldene Funken; fast die Hälfte der hellen Körner hat
+  eine 1-px-Schattenseite, damit sie auf dem Cremegrund sichtbar bleiben;
+- oberhalb der Front rieseln die Körner als dichter Sand-Strahl nach unten, über das Brett hinaus
+  (individuelle Schwerkraft, leichte Seitwärts-Streuung, Lebensdauer 1,2–1,6 s);
 - unterhalb der Front bleibt die Kachel intakt und scharf (abgeschnitten), an der Front ein
-  ausgefranster Körner-Rand;
+  dichter, ausgefranster Körner-Rand;
 - pro Buchstabe in Wortreihenfolge um 50 ms versetzt; die Gravitation des Bretts startet, wenn
   die Front der letzten Kachel unten angekommen ist.
 
 Dazu ein granulares **Rieselgeräusch** wie Sand/Zucker (`Sound.trickle` in `src/audio.js`): pro
-Kachel ein leiser, bandpassgefilterter Rausch-Teppich plus viele winzige Rausch-Körner (4–22 ms)
-mit zufälligem Timing, Tonhöhe und Filterfrequenz, Hüllkurve synchron zum Auflösen, überlappend pro
-Buchstabe, hinter einem Hochpass; moderat laut, respektiert Stumm und die iOS-Audio-Freigabe.
+Kachel ein leiser, bandpassgefilterter Rausch-Teppich plus viele winzige Rausch-Körner und feines
+Knistern mit zufälligem Timing, Tonhöhe und Filterfrequenz. Die Kornzahl wächst mit der
+Partikeldichte (gesamt gedeckelt), die Lautstärke nicht. Die Hüllkurve folgt dem Auflösen und
+überlappt pro Buchstabe. Respektiert Stumm und die iOS-Audio-Freigabe.
 
-- Performance: Typed-Array-Pool, max. 2500 Körner, `fillRect` gebündelt nach Farbe, rAF-Schleife
-  nur solange Körner leben (headless bei 4× CPU-Drosselung: 2040 Körner mit stabilen 60 fps).
+- Performance: Typed-Array-Pool, max. 10 000 Körner. Die Körner werden direkt in einen
+  ImageData-Pixelpuffer geschrieben und pro Frame mit einem `putImageData` + `drawImage` (nur
+  Schmutz-Rechteck) übertragen; rAF-Schleife nur solange etwas lebt.
+  `tests/perf-dissolve.js` (iPhone-14-Profil, 4× CPU-Drosselung, 5-Buchstaben-Wort + Kaskade mit
+  6 Kacheln = ~9400 Körner): Median 16,7 ms, p95 16,8 ms (60 fps).
 - `prefers-reduced-motion: reduce` → keine Partikel, einfaches Ausblenden.
 - Undo, Reset und Menü entfernen sofort alle Körner.
 - Stellschrauben oben in `src/particles.js` (`MAX_PARTICLES`, `GRAINS_PER_ROW`, `DISSOLVE_S`,
-  `STAGGER_S`, `EDGE_BAND`, `GRAVITY`, `DRAG`, `LIFE_MIN/MAX`, `SPARKLE_RATE`), Timing in `ANIM`
-  (`src/render.js`). `LetterSlideParticles.timeScale = 0.25` = Zeitlupe (nur für Tests/Screenshots).
+  `STAGGER_S`, `EDGE_BAND`, `GRAVITY`, `DRAG`, `LIFE_MIN/MAX`, `SPARKLE_RATE`, `INK_DUST_RATE`,
+  `SHADOW_RATE`), Timing in `ANIM` (`src/render.js`). `LetterSlideParticles.timeScale = 0.25` =
+  Zeitlupe (nur für Tests/Screenshots).
 
 ## Design: „Pastell-Candy“
 
@@ -145,7 +153,8 @@ letter-slide/
 ├── tests/
 │   ├── logic.test.js       # Logik-Tests (node:test, keine Abhängigkeiten)
 │   ├── stats.test.js       # Tests der localStorage-Statistik
-│   └── browser-smoke.js    # optionaler Headless-Chrome-Test (Desktop + iPhone 14)
+│   ├── browser-smoke.js    # optionaler Headless-Chrome-Test (Desktop + iPhone 14)
+│   └── perf-dissolve.js    # optional: fps beim Auflösen (iPhone-Profil, 4× CPU-Drosselung)
 ├── docs/SPEC.md            # Original-Spezifikation
 └── .github/workflows/test.yml
 ```

@@ -15,7 +15,7 @@
    *   crumble = Mindest-Wartezeit; tatsächlich wird gewartet, bis die Auflöse-Front
    *             aller Kacheln unten angekommen ist (particles.js) -> dann Gravitation
    *   vanish  = einfaches Ausblenden (Fallback bei prefers-reduced-motion) */
-  const ANIM = { slide: 120, flash: 150, crumble: 300, vanish: 180, fall: 150, wordHold: 700, comboHold: 750 };
+  const ANIM = { slide: 120, flash: 150, crumble: 350, vanish: 180, fall: 150, wordHold: 700, comboHold: 750 };
   const Particles = root.LetterSlideParticles;
   const Sound = root.LetterSlideAudio;
 
@@ -162,9 +162,9 @@
         const order = new Map();
         for (const m of step.matches) m.cells.forEach((cell, k) => { if (!order.has(cell)) order.set(cell, k); });
         const items = [...order].map(([cell, k]) => ({ el: tiles.get(cell), order: k }));
-        const { duration, starts } = Particles.crumble(items); // Canvas zeichnet die Kacheln ab jetzt
+        const { duration, starts, grainsPerTile } = Particles.crumble(items); // Canvas zeichnet die Kacheln ab jetzt
         for (const { el } of items) el.classList.add("crumbled"); // DOM-Kachel weg, Canvas übernimmt
-        if (Sound && Sound.trickle) Sound.trickle(starts, Particles.DISSOLVE_S);
+        if (Sound && Sound.trickle) Sound.trickle(starts, Particles.DISSOLVE_S, grainsPerTile / 300);
         // Gravitation erst, wenn die Front aller Kacheln unten angekommen ist (Körner rieseln weiter)
         await wait(Math.max(ANIM.crumble, duration * 1000));
       } else {

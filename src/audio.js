@@ -90,8 +90,9 @@
      * Rausch-Teppich. Hüllkurve folgt der Auflösedauer, Kacheln überlappen leicht.
      * @param starts   Startzeiten der Kacheln in s (relativ zu jetzt)
      * @param duration Auflösedauer pro Kachel in s
+     * @param density  Partikeldichte (1 = ~300 Körner pro Kachel); mehr Körner -> dichteres Rieseln
      */
-    trickle(starts, duration = 0.46) {
+    trickle(starts, duration = 0.55, density = 1) {
       const ctx = this.ensure();
       if (!ctx || !starts || !starts.length) return;
       try {
@@ -122,34 +123,39 @@
           bedBp.frequency.linearRampToValueAtTime(3200, t0 + d); // wird zum Ende hin etwas dunkler
           const bedGain = ctx.createGain();
           bedGain.gain.setValueAtTime(0.0001, t0);
-          bedGain.gain.linearRampToValueAtTime(0.05, t0 + d * 0.3);
+          bedGain.gain.linearRampToValueAtTime(0.045 + 0.012 * Math.min(3, density || 1), t0 + d * 0.3);
           bedGain.gain.linearRampToValueAtTime(0.0001, t0 + d);
           bed.connect(bedBp).connect(bedGain).connect(hp);
           bed.start(t0, Math.random() * (bufDur - d - 0.05));
           bed.stop(t0 + d + 0.02);
 
           // 2) Körner: dichter in der Mitte der Auflösung
-          const count = 34;
+          // Kornzahl wächst mit der Partikeldichte; gesamt gedeckelt (Knotenzahl auf iOS)
+          const dens = Math.max(1, Math.min(3.5, density || 1));
+          const count = Math.min(Math.round(34 * dens), Math.floor(420 / starts.length));
+          const quiet = 1 / Math.sqrt(dens);   // dichter, aber nicht lauter
           for (let k = 0; k < count; k++) {
             const x = Math.random();
             if (Math.random() > 0.35 + 0.65 * env(x)) continue;
             const gt = t0 + x * d;
-            const gd = 0.004 + Math.random() * 0.018;
+            const gd = 0.003 + Math.random() * 0.016;
             const src = ctx.createBufferSource();
             src.buffer = this._noise;
             src.playbackRate.value = 0.6 + Math.random() * 1.2;   // Tonhöhe variieren
             const bp = ctx.createBiquadFilter();
             bp.type = "bandpass";
-            bp.frequency.value = 2400 + Math.random() * 5200;
-            bp.Q.value = 1.5 + Math.random() * 4;
+            bp.frequency.value = crackle ? 6500 + Math.random() * 4000 : 2400 + Math.random() * 5200;
+            bp.Q.value = crackle ? 6 + Math.random() * 6 : 1.5 + Math.random() * 4;
             const g = ctx.createGain();
-            const peak = (0.12 + Math.random() * 0.3) * (0.4 + 0.6 * env(x));
+            const crackle = Math.random() < 0.3;   // feines Knistern: kürzer, höher
+            const peak = (0.12 + Math.random() * 0.3) * (0.4 + 0.6 * env(x)) * quiet * (crackle ? 0.8 : 1);
             g.gain.setValueAtTime(0.0001, gt);
             g.gain.exponentialRampToValueAtTime(peak, gt + 0.0015); // knackiger Einsatz
-            g.gain.exponentialRampToValueAtTime(0.0001, gt + gd);
+            const len = crackle ? Math.min(gd, 0.004) : gd;
+            g.gain.exponentialRampToValueAtTime(0.0001, gt + len);
             src.connect(bp).connect(g).connect(hp);
             src.start(gt, Math.random() * (bufDur - 0.05));
-            src.stop(gt + gd + 0.01);
+            src.stop(gt + len + 0.01);
           }
         }
       } catch (_) { /* Sound ist optional */ }

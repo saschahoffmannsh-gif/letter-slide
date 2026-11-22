@@ -9,7 +9,6 @@ const fs = require("fs");
 const http = require("http");
 const puppeteer = require(process.env.PUPPETEER_CORE || "puppeteer-core");
 const ROOT = path.resolve(__dirname, "..");
-const LetterSlideParticlesMax = 2500;
 const CHROME = process.env.CHROME_PATH || "/usr/bin/google-chrome";
 const SHOTS = process.env.SCREENSHOTS ? path.resolve(process.env.SCREENSHOTS) : null;
 
@@ -77,7 +76,12 @@ const sampleDissolve = (page, k = 0) => page.evaluate((k) => {
   const band = (a, b) => { const r = rowCov.slice(Math.floor(a * h), Math.ceil(b * h)); return r.reduce((s, v) => s + v, 0) / r.length; };
   let boundary = 1;
   for (let y = 0; y < h - 2; y++) if (rowCov[y] > 0.97 && rowCov[y + 1] > 0.97 && rowCov[y + 2] > 0.97) { boundary = y / h; break; }
-  return { progress: t.progress, top: band(0, 0.15), bottom: band(0.82, 0.95), boundary };
+  // Riesel-Strahl: deckende Pixel im Bereich bis 3 Kachelhöhen unter der Kachel
+  const by = Math.round((t.y + t.h + 2) * dpr), bh = Math.round(Math.min(3 * t.h, innerHeight - t.y - t.h - 4) * dpr);
+  const bx = Math.round((t.x - t.w * 0.25) * dpr), bw = Math.round(t.w * 1.5 * dpr);
+  let below = 0;
+  if (bh > 0) { const e = c.getContext("2d").getImageData(bx, by, bw, bh).data; for (let q = 3; q < e.length; q += 4) if (e[q] > 60) below++; }
+  return { progress: t.progress, top: band(0, 0.15), bottom: band(0.82, 0.95), boundary, belowPx: Math.round(below / (dpr * dpr)) };
 }, k);
 
 const screenIs = (page, name) => page.evaluate((n) => LetterSlideApp.screen === n && !document.getElementById(n).hidden, name);
@@ -147,8 +151,9 @@ async function desktopFile(browser) {
   ok(before !== null, "Treffer-Zug gefunden");
   await page.waitForFunction(() => LetterSlideParticles.alive > 0, { timeout: 3000 }).catch(() => {});
   const spawned = await page.evaluate((b) => ({ alive: LetterSlideParticles.alive, spawned: LetterSlideParticles.spawnedTotal - b }), before);
-  ok(spawned.alive > 0 && spawned.spawned >= 100, `Partikel gespawnt (${spawned.spawned} Körner, ${spawned.alive} aktiv)`);
-  ok(spawned.alive <= LetterSlideParticlesMax, "Partikel-Limit eingehalten");
+  ok(spawned.alive > 0 && spawned.spawned >= 600 * 3, `Partikel gespawnt, ≥ 600 pro Kachel (${spawned.spawned} Körner, ${spawned.alive} aktiv)`);
+  const cap = await page.evaluate(() => LetterSlideParticles.MAX_PARTICLES);
+  ok(spawned.alive <= cap && cap >= 8000, `Partikel-Limit eingehalten (max. ${cap})`);
   await page.waitForFunction(() => { const t = LetterSlideParticles.debugTiles()[0]; return t && t.progress >= 0.5; }, { polling: "raf", timeout: 3000 });
   const mid = await sampleDissolve(page, 0);
   ok(mid && mid.top < 0.35 && mid.bottom > 0.9, `Auflösen von oben: bei ${Math.round(mid.progress * 100)} % oben ${Math.round(mid.top * 100)} % Deckung, unten ${Math.round(mid.bottom * 100)} % (intakt)`);
@@ -335,7 +340,7 @@ async function iphone(browser) {
   ok(await page.evaluate(() => !!LetterSlideAudio.ctx), "AudioContext nach erster Berührung angelegt (iOS-Unlock)");
   await shot(page, "iphone.png");
 
-  // Auflösen von oben nach unten in Zeitlupe (×0,25) festhalten: 25 %, 50 %, 80 %
+  // Auflösen von oben nach unten in Zeitlupe (×0,25) festhalten: 30 %, 60 %, 90 %
   await page.evaluate(() => { LetterSlideParticles.timeScale = 0.25; });
   const b0 = await playUntilScore(page, (sel) => page.tap(sel));
   ok(b0 !== null, "Treffer-Zug gefunden");
@@ -343,15 +348,20 @@ async function iphone(browser) {
     await page.waitForSelector("#board .tile.hit", { timeout: 3000 });
     if (SHOTS) await page.screenshot({ path: path.join(SHOTS, "iphone-dissolve-00-glow.png") });
     const samples = [];
-    for (const pct of [25, 50, 80]) {
+    for (const pct of [30, 60, 90]) {
       await page.waitForFunction((p) => { const t = LetterSlideParticles.debugTiles()[0]; return t && t.progress >= p / 100; }, { polling: "raf", timeout: 8000 }, pct);
       const smp = await sampleDissolve(page, 0);
       samples.push(smp);
-      if (SHOTS) await page.screenshot({ path: path.join(SHOTS, `iphone-dissolve-${pct}.png`) });
+      if (SHOTS) await page.screenshot({ path: path.join(SHOTS, `iphone-dissolve-v2-${pct}.png`) });
     }
     const desc = samples.map((x) => `${Math.round(x.progress * 100)}%: Rest ab ${Math.round(x.boundary * 100)}%`).join(", ");
-    ok(samples[0].boundary < samples[1].boundary && samples[1].boundary < samples[2].boundary, "Front wandert von oben nach unten (" + desc + ")");
-    ok(samples[0].bottom > 0.9 && samples[1].bottom > 0.9, "unterer Teil bleibt bis zur Mitte intakt (25 %/50 %)");
+    ok(samples[0].boundary < samples[1].boundary && samples[1].boundary <= samples[2].boundary && samples[2].boundary > 0.9, "Front wandert von oben nach unten (" + desc + ")");
+    ok(samples[0].bottom > 0.9, "unterer Teil bei 30 % intakt");
+    ok(samples[1].belowPx > 150, `sichtbarer Riesel-Strahl unter der Kachel (${samples[1].belowPx} px² bei 60 %)`);
+    // zusätzlich: Riesel-Strahl kurz nach dem Auflösen der letzten Kachel
+    await page.waitForFunction(() => LetterSlideParticles.debugTiles().every((t) => t.done), { polling: "raf", timeout: 8000 });
+    await new Promise((r) => setTimeout(r, 600));
+    if (SHOTS) await page.screenshot({ path: path.join(SHOTS, "iphone-dissolve-v2-stream.png") });
     await idle(page);
     ok(await particlesCleared(page), "Canvas nach dem Auflösen wieder leer");
   }
