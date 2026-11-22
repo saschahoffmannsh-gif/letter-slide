@@ -218,7 +218,12 @@
       const w = rect.width, faceH = rect.height, h = faceH + EDGE_PX;
       const t0 = clock + order * STAGGER_S;
       const tileId = tiles.length;
-      tiles.push({ x: rect.left, y: rect.top, w, faceH, h, t0, letter, font, radius: parseFloat(cs.borderTopLeftRadius) || 13, done: false });
+      // Farben pro Kachel (Modifikator-Kacheln: Stein grau, Brunnen blau, Trieb grün) aus den CSS-Variablen
+      const pv = (n, d) => cs.getPropertyValue(n).trim() || d;
+      const col = { face: pv("--c", theme.face), shade: pv("--s", theme.shade), edge: pv("--d", theme.edge), ink: cs.color || theme.ink };
+      const tid = { ...ids, face: colorId(col.face), shade: colorId(col.shade), edge: colorId(col.edge), ink: colorId(col.ink) };
+      if (col.face.toUpperCase() !== String(theme.face).toUpperCase()) { tid.white = tid.face; tid.grey = tid.shade; tid.warm = tid.edge; }
+      tiles.push({ x: rect.left, y: rect.top, w, faceH, h, t0, letter, font, radius: parseFloat(cs.borderTopLeftRadius) || 13, done: false, col });
       starts.push(order * STAGGER_S);
       duration = Math.max(duration, order * STAGGER_S + DISSOLVE_S);
 
@@ -263,14 +268,14 @@
           sparkle[i] = 0;
           shadow[i] = 0;
           const k = Math.random();
-          if (ly > faceH) { color[i] = k < 0.5 ? ids.edge : ids.warm; }
-          else if (mask && mask[gy * cols + gx]) color[i] = ids.ink;
+          if (ly > faceH) { color[i] = k < 0.5 ? tid.edge : tid.warm; }
+          else if (mask && mask[gy * cols + gx]) color[i] = tid.ink;
           else if (k < SPARKLE_RATE) { color[i] = k < SPARKLE_RATE * 0.4 ? ids.goldHi : ids.gold; sparkle[i] = 1; vy[i] -= rand(30, 110); vx[i] *= 2; }
-          else if (k < SPARKLE_RATE + INK_DUST_RATE) color[i] = ids.ink;
+          else if (k < SPARKLE_RATE + INK_DUST_RATE) color[i] = tid.ink;
           else {
             // helle Körner: weiß / hellgrau / warmgrau, unten etwas dunkler (Verlauf der Kachel)
             const g = Math.random() + (ly / faceH) * 0.35;
-            color[i] = g < 0.45 ? ids.white : g < 0.8 ? ids.face : g < 1.05 ? ids.grey : g < 1.2 ? ids.shade : ids.warm;
+            color[i] = g < 0.45 ? tid.white : g < 0.8 ? tid.face : g < 1.05 ? tid.grey : g < 1.2 ? tid.shade : tid.warm;
             shadow[i] = Math.random() < SHADOW_RATE ? 1 : 0;
           }
           spawnedTotal++;
@@ -355,16 +360,16 @@
       ctx.rect(t.x - 2, clipTop, t.w + 4, t.y + t.h - clipTop + 2);
       ctx.clip();
       // Unterkante (warmgrau) und weiße Fläche mit leichtem Verlauf
-      ctx.fillStyle = theme.edge;
+      ctx.fillStyle = t.col.edge;
       roundRectPath(ctx, t.x, t.y + EDGE_PX, t.w, t.faceH, t.radius);
       ctx.fill();
       const grad = ctx.createLinearGradient(0, t.y, 0, t.y + t.faceH);
-      grad.addColorStop(0.55, theme.face);
-      grad.addColorStop(1, theme.shade);
+      grad.addColorStop(0.55, t.col.face);
+      grad.addColorStop(1, t.col.shade);
       ctx.fillStyle = grad;
       roundRectPath(ctx, t.x, t.y, t.w, t.faceH, t.radius);
       ctx.fill();
-      if (t.letter) drawLetter(ctx, t.letter, t.font, t.x + t.w / 2, t.y + t.faceH / 2, theme.ink);
+      if (t.letter) drawLetter(ctx, t.letter, t.font, t.x + t.w / 2, t.y + t.faceH / 2, t.col.ink);
       ctx.restore();
     }
   }

@@ -73,3 +73,23 @@ test("Speicherfehler (Quota) wird abgefangen", () => {
   assert.equal(S.saveStats(full, S.emptyStats()), false);
   assert.equal(S.saveStats(null, S.emptyStats()), false);
 });
+
+test("Level-Fortschritt: Bestwert je Level, Freischalten, Gesamtpunkte", () => {
+  const st = memoryStorage();
+  const stats = S.emptyStats();
+  assert.equal(stats.progress.unlocked, 1);
+  assert.equal(S.recordLevel(stats, 1, 60).isNewBest, true);
+  assert.equal(S.recordLevel(stats, 1, 40).isNewBest, false);
+  S.recordLevel(stats, 2, 40);
+  assert.equal(stats.progress.unlocked, 3);
+  assert.equal(S.totalScore(stats), 100);
+  assert.equal(S.totalScore(stats, 2), 60);
+  assert.equal(S.solvedCount(stats), 2);
+  stats.tips.first_stein = true;
+  stats.prefs.preview = false;
+  S.saveStats(st, stats);
+  const back = S.loadStats(st);
+  assert.deepEqual(back.progress, { unlocked: 3, best: { 1: 60, 2: 40 } });
+  assert.equal(back.tips.first_stein, true);
+  assert.equal(back.prefs.preview, false);
+});

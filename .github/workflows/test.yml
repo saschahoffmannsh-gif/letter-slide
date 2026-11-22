@@ -13,6 +13,6 @@ jobs:
         with:
           node-version: 20
       - name: Syntax-Check (alle Scripts)
-        run: for f in src/*.js tests/*.js; do node --check "$f"; done
+        run: for f in src/*.js tests/*.js tools/*.js; do node --check "$f"; done
       - name: Logik-Tests
         run: npm test

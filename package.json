@@ -1,10 +1,10 @@
 {
-  "name": "letter-slide",
+  "name": "wortgarten",
   "version": "0.1.0",
   "private": true,
-  "description": "Letter Slide – deutsches Wort-Schiebepuzzle (spielbarer Prototyp, ohne Build-Schritt)",
+  "description": "Wortgarten – deutsches Wort-Schiebepuzzle mit Zielwort und Modifikatoren (ohne Build-Schritt)",
   "scripts": {
-    "test": "node --test tests/logic.test.js tests/stats.test.js",
+    "test": "node --test tests/logic.test.js tests/stats.test.js tests/levels.test.js",
     "test:browser": "node tests/browser-smoke.js"
   },
   "engines": {

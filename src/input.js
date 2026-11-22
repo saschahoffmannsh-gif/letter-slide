@@ -1,8 +1,8 @@
 /*
- * Letter Slide – EINGABE
- * ======================
+ * Wortgarten – EINGABE
+ * =====================
  * Übersetzt Nutzeraktionen in Befehle an den Controller (main.js):
- *   - Buttons unten (Undo, Reset, Teilen, Runde beenden, Ton)
+ *   - Buttons (Undo, Reset, Hinweis, Vorschau, Was passiert?, Teilen, Ton)
  *   - Wischgesten auf dem Brett (Pointer Events: Touch, Maus, Stift)
  *       waagerecht wischen -> Zeile der berührten Kachel um 1 Feld
  *       senkrecht wischen  -> Spalte der berührten Kachel um 1 Feld
@@ -24,7 +24,7 @@
   const TAP_MAX_PX = 10;
 
   /**
-   * @param h Handler: { onSlide(axis, index, dir), onUndo(), onReset(), onEnd(), onShare(),
+   * @param h Handler: { onSlide(axis, index, dir), onUndo(), onReset(), onShare(), onHint(), onWhatIf(), onTogglePreview(),
    *                     onToggleMute(), onSelect(r, c), isBusy() }
    */
   function bind(h) {
@@ -32,7 +32,9 @@
     $("btn-undo").addEventListener("click", h.onUndo);
     $("btn-reset").addEventListener("click", h.onReset);
     $("btn-share").addEventListener("click", h.onShare);
-    $("btn-end").addEventListener("click", h.onEnd);
+    $("btn-hint").addEventListener("click", h.onHint);
+    $("btn-whatif").addEventListener("click", h.onWhatIf);
+    $("btn-preview").addEventListener("click", h.onTogglePreview);
     $("btn-mute").addEventListener("click", h.onToggleMute);
     bindSwipe(View.el.board, h);
     bindKeyboard(h);

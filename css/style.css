@@ -1,5 +1,5 @@
 /*
- * Letter Slide – Theme „Pastell-Candy“
+ * Wortgarten – Theme „Pastell-Candy“ (unverändert aus Letter Slide übernommen)
  * ====================================
  * Reines CSS + Inline-SVG, keine Bilddateien, keine externen Fonts.
  * Mobil zuerst (iPhone hochkant ~375–430 px), skaliert bis Desktop.
@@ -19,9 +19,9 @@
   --shadow: rgba(110, 78, 50, .16);
 
   /* --- Titel --- */
-  --title-a: #F4878F;            /* LETTER (Koralle/Rosa) */
+  --title-a: #F4878F;            /* WORT (Koralle/Rosa) */
   --title-a-deep: #D9636E;
-  --title-b: #B79BE6;            /* SLIDE (Lavendel) */
+  --title-b: #B79BE6;            /* GARTEN (Lavendel) */
   --title-b-deep: #9076C9;
   --heart: #F5A0B0;
 
@@ -33,6 +33,12 @@
   --tile-sel-line: #F4EFFD;      /* Zeile/Spalte der Auswahl */
   --hit: #FFCF3A; --hit-deep: #F0A818; --hit-glow: rgba(255, 196, 40, .75); /* Treffer-Gold */
   --select: #8B6FD0;
+
+  /* --- Modifikatoren: gleiche Kachelform, sanfte Pastell-Tönung (auch für die Körner beim Zerbröseln) --- */
+  --stein-face: #EEEBE7;   --stein-shade: #DFD9D2;   --stein-edge: #BDB4AA;   --stein-ink: #5C554E;   --stein-rim: #CBC3BA;
+  --brunnen-face: #B9DDF6; --brunnen-shade: #A2CFF0; --brunnen-edge: #7FB3DD; --brunnen-ink: #FFFFFF; --brunnen-ink-edge: #5D95C6;
+  --trieb-face: #DDF2CF;   --trieb-shade: #C8E8B4;   --trieb-edge: #9DCB86;   --trieb-ink: #3D6A2E;
+  --preview: #FFE27A;      --preview-glow: rgba(255, 205, 60, .85);  /* gelbes Aufblitzen der Vorschau */
 
   /* --- Pillen / Buttons --- */
   --mint: #BFE6D3;  --mint-deep: #8FCBAE;
@@ -63,13 +69,13 @@
   /* Brett: so breit wie möglich, passt aber auch in die Höhe */
   --board: max(264px, min(430px,
     calc(100vw - 2 * var(--arrow) - 2 * var(--pad-x) - var(--safe-l) - var(--safe-r)),
-    calc(100vh - 300px - var(--safe-t) - var(--safe-b))));
+    calc(100vh - 392px - var(--safe-t) - var(--safe-b))));
 }
 @supports (height: 100dvh) {
   :root {
     --board: max(264px, min(430px,
       calc(100vw - 2 * var(--arrow) - 2 * var(--pad-x) - var(--safe-l) - var(--safe-r)),
-      calc(100dvh - 300px - var(--safe-t) - var(--safe-b))));
+      calc(100dvh - 392px - var(--safe-t) - var(--safe-b))));
   }
 }
 
@@ -278,7 +284,7 @@ button.arrow:active:not(:disabled) .arrow-key { transform: translateY(2px); box-
 .tile.sel-line .face { --c: var(--tile-sel-line); }
 .tile.sel .face { outline: 3px solid var(--select); outline-offset: -3px; }
 /* Treffer: golden aufleuchten, dann weich ausblenden */
-.tile.hit .face {
+.tile.tile.hit .face { /* doppelte Klasse: schlägt auch die Modifikator-Tönung */
   --c: var(--hit); --d: var(--hit-deep);
   background: radial-gradient(circle at 50% 35%, #FFF2B0 0%, var(--hit) 60%);
   box-shadow: inset 0 2px 0 rgba(255,255,255,.7), 0 4px 0 var(--d), 0 0 9px 2px var(--hit-glow);
@@ -386,6 +392,124 @@ button.arrow:active:not(:disabled) .arrow-key { transform: translateY(2px); box-
 #modal-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 14px; }
 #modal-actions .pill { flex: 1 1 0; min-width: 120px; }
 
+/* ------------------------------------------------------------------ Wortgarten: Zielwort-Feld */
+.target-card {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 7px 12px 8px;
+  width: calc(var(--board) + 2 * var(--arrow)); max-width: 100%; border-radius: 18px;
+  background: var(--card); box-shadow: inset 0 0 0 2px var(--card-edge), 0 4px 0 var(--card-edge), 0 6px 12px var(--shadow);
+}
+.target-top { display: flex; align-items: baseline; gap: 8px; justify-content: center; flex-wrap: wrap; line-height: 1.1; }
+.target-top .label { font-size: .68rem; letter-spacing: .08em; color: var(--ink-soft); }
+.target-hint { font-size: .95rem; font-weight: 900; color: var(--ink); text-align: center; }
+.target-slots { display: flex; gap: 5px; justify-content: center; }
+/* Platzhalter = Mini-Kachel im Stil der Brett-Kacheln */
+.slot {
+  width: 30px; height: 32px; border-radius: 9px; display: flex; align-items: center; justify-content: center;
+  font-size: 1.1rem; font-weight: 900; color: var(--tile-ink);
+  background: linear-gradient(var(--tile-face) 55%, var(--tile-shade));
+  box-shadow: 0 0 0 1px rgba(74,52,38,.05), 0 3px 0 var(--tile-edge), 0 4px 6px var(--shadow);
+}
+.slot.empty { color: var(--ink-soft); opacity: .8; }
+.slot.revealed { background: var(--butter); box-shadow: 0 3px 0 var(--hit-deep), 0 4px 6px var(--shadow); }
+.slot.solved { background: var(--sage); box-shadow: 0 3px 0 var(--sage-deep), 0 4px 6px var(--shadow); }
+.target-card.free .target-slots { display: none; }
+.hint-line { font-size: .74rem; color: var(--ink-soft); text-align: center; line-height: 1.25; max-width: 100%; }
+
+/* ------------------------------------------------------------------ Wortgarten: Modifikator-Status (im Zielwort-Feld) */
+.modstatus {
+  display: flex; align-items: center; justify-content: center; gap: 5px; min-height: 24px; padding: 2px 10px;
+  border-radius: 999px; font-size: .76rem; color: var(--ink); white-space: nowrap; background: rgba(255,255,255,.7);
+}
+.mod-chip { display: inline-flex; align-items: center; gap: 3px; }
+.mod-chip svg { width: 16px; height: 16px; flex: none; }
+.mod-chip b { font-weight: 900; }
+.mod-chip.off { opacity: .4; }
+.modstatus .sep { font-style: normal; color: var(--card-edge); font-weight: 900; }
+.controls .pill.toggle { flex: 0 0 auto; padding: 8px 14px; }
+.pill.toggle[aria-pressed="true"] { --c: var(--butter); --d: var(--hit-deep); }
+.pill.toggle[aria-pressed="false"] svg { opacity: .45; }
+.controls .pill .count {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 1.4em; height: 1.4em; margin-left: 2px;
+  border-radius: 999px; background: rgba(255,255,255,.7); font-size: .85em;
+}
+
+/* ------------------------------------------------------------------ Wortgarten: Modifikator-Kacheln */
+/* Gleiche weiße Kachelform; nur Farbe/Muster/Icon unterscheiden sich. --c/--s/--d/color liest auch particles.js. */
+.tile .face { --s: var(--tile-shade); background: linear-gradient(var(--c) 55%, var(--s)); position: relative; }
+.mod-ic { position: absolute; top: 7%; right: 7%; width: 30%; height: 30%; pointer-events: none; filter: drop-shadow(0 1px 0 rgba(255,255,255,.7)); }
+.tile.mod-stein .face {
+  --c: var(--stein-face); --s: var(--stein-shade); --d: var(--stein-edge); color: var(--stein-ink);
+  box-shadow: inset 0 0 0 3px var(--stein-rim), inset 0 -2px 0 rgba(74,52,38,.05), 0 4px 0 var(--d), 0 5px 8px var(--shadow);
+}
+/* Brunnen: Wellenmuster (Inline-SVG als Data-URI) über dem Blau, weißer Buchstabe mit blauer Kante */
+.tile.mod-brunnen .face {
+  --c: var(--brunnen-face); --s: var(--brunnen-shade); --d: var(--brunnen-edge); color: var(--brunnen-ink);
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='12' viewBox='0 0 24 12'%3E%3Cpath d='M0 8c3-3 6-3 9 0s6 3 9 0 6-3 6-3' fill='none' stroke='%23FFFFFF' stroke-opacity='.55' stroke-width='1.6'/%3E%3C/svg%3E") 0 100% / 50% auto repeat-x,
+    linear-gradient(var(--c) 55%, var(--s));
+  -webkit-text-stroke: 1.5px var(--brunnen-ink-edge); paint-order: stroke fill;
+  text-shadow: 0 2px 0 var(--brunnen-ink-edge);
+}
+/* Trieb: Sprossen-Muster, dunkelgrüner Buchstabe */
+.tile.mod-trieb .face {
+  --c: var(--trieb-face); --s: var(--trieb-shade); --d: var(--trieb-edge); color: var(--trieb-ink);
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cg fill='none' stroke='%2388BE6E' stroke-opacity='.45' stroke-width='1.2' stroke-linecap='round'%3E%3Cpath d='M4 14v-4M4 10c0-2-1.5-3-3-3M4 10c0-2 1.5-3 3-3'/%3E%3Cpath d='M12 7V3M12 3c0-1.5-1-2-2-2M12 3c0-1.5 1-2 2-2'/%3E%3C/g%3E%3C/svg%3E") 0 0 / 45% auto repeat,
+    linear-gradient(var(--c) 55%, var(--s));
+}
+/* Steine liegen über rutschenden Kacheln (die gleiten „unter“ dem Stein durch) */
+.tile.mod-stein { z-index: 2; }
+/* Frisch gepflanzt: kurzer Plopp */
+.tile.planted .face { animation: plant-pop .5s cubic-bezier(.3,1.7,.5,1); }
+@keyframes plant-pop { 0% { transform: scale(.55); } 60% { transform: scale(1.12); } 100% { transform: scale(1); } }
+
+/* Vorschau: Zielfelder blitzen gelb (PREVIEW_MS), Geister-Icon zeigt den Typ */
+.tile.preview .face { animation: preview-flash .8s ease-in-out; }
+.tile.preview .preview-ic { position: absolute; inset: 22%; width: 56%; height: 56%; opacity: .9; animation: preview-ic .8s ease-in-out; pointer-events: none; }
+@keyframes preview-flash {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(74,52,38,.05), 0 4px 0 var(--d), 0 5px 8px var(--shadow); }
+  12%, 78% { background: radial-gradient(circle at 50% 35%, #FFF6C8 0%, var(--preview) 65%); }
+  12%, 45%, 78% { box-shadow: 0 0 0 3px var(--hit-deep), 0 4px 0 var(--hit-deep), 0 0 12px 3px var(--preview-glow); }
+  30%, 62% { background: radial-gradient(circle at 50% 35%, #FFF6C8 0%, var(--preview) 65%); box-shadow: 0 0 0 2px var(--hit), 0 4px 0 var(--d), 0 0 6px 1px var(--preview-glow); }
+}
+@keyframes preview-ic { 0% { transform: scale(.4); opacity: 0; } 25% { transform: scale(1.1); opacity: 1; } 85% { opacity: 1; } 100% { opacity: 0; } }
+/* Typ erkennt man am Geister-Icon (Stein / Tropfen / Blatt) in der Typ-Farbe */
+.tile.preview.p-stein .preview-ic { color: var(--stein-edge); }
+.tile.preview.p-brunnen .preview-ic { color: var(--brunnen-edge); }
+.tile.preview.p-trieb .preview-ic { color: var(--trieb-ink); }
+
+/* Zielwort blüht auf: Buchstaben in Pastellfarben, Farb-Bloom über das ganze Brett */
+.tile.bloom .face {
+  background: radial-gradient(circle at 50% 35%, #fff 0%, var(--bc, var(--mint)) 70%);
+  box-shadow: inset 0 2px 0 rgba(255,255,255,.7), 0 4px 0 var(--bd, var(--mint-deep)), 0 0 12px 3px rgba(255,255,255,.9);
+  animation: bloom-pop .6s cubic-bezier(.3,1.7,.5,1) backwards; animation-delay: calc(var(--k, 0) * 80ms);
+}
+@keyframes bloom-pop { 0% { transform: scale(.6) rotate(-8deg); } 60% { transform: scale(1.15) rotate(3deg); } 100% { transform: scale(1.04); } }
+#bloom { grid-area: 2 / 2; position: relative; z-index: 3; pointer-events: none; border-radius: 16px; overflow: hidden; opacity: 0; }
+#bloom.show { animation: bloom-wash 2s ease-out forwards; }
+#bloom::before {
+  content: ""; position: absolute; inset: -30%;
+  background: radial-gradient(circle at 30% 30%, rgba(247,169,184,.55), transparent 35%), radial-gradient(circle at 70% 35%, rgba(216,204,243,.6), transparent 35%),
+              radial-gradient(circle at 40% 72%, rgba(191,230,211,.6), transparent 38%), radial-gradient(circle at 75% 75%, rgba(251,231,162,.65), transparent 35%);
+  animation: bloom-spin 2s ease-out forwards;
+}
+#bloom svg { position: absolute; width: 22%; height: 22%; left: var(--x); top: var(--y); animation: petal 1.6s cubic-bezier(.2,.9,.3,1) backwards; animation-delay: var(--d, 0s); }
+@keyframes bloom-wash { 0% { opacity: 0; } 15% { opacity: 1; } 75% { opacity: .9; } 100% { opacity: 0; } }
+@keyframes bloom-spin { from { transform: scale(.3) rotate(-20deg); } to { transform: scale(1.1) rotate(10deg); } }
+@keyframes petal { 0% { transform: scale(0) rotate(-90deg); opacity: 0; } 40% { opacity: 1; } 100% { transform: scale(1) rotate(20deg); opacity: .95; } }
+
+/* Gelöst-Zusammenfassung im Dialog */
+#modal-body .formula { font-size: .82rem; color: var(--ink-soft); margin: 0 0 6px; }
+#modal-body .tip-ic { display: flex; justify-content: center; gap: 10px; margin-bottom: 8px; }
+#modal-body .tip-ic .tile-mini { width: 46px; height: 46px; position: relative; }
+#modal-body .whatif { list-style: none; padding: 0; margin: 0 0 6px; text-align: left; font-size: .88rem; max-height: 46vh; overflow: auto; }
+#modal-body .whatif li { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 12px; margin-bottom: 4px; background: #fff; box-shadow: inset 0 0 0 2px var(--card-edge); }
+#modal-body .whatif li svg { width: 18px; height: 18px; flex: none; }
+#modal-body .whatif .mv { font-weight: 900; min-width: 74px; }
+.howto .mods { list-style: none; padding: 0; }
+.howto .mods li { display: flex; gap: 8px; align-items: flex-start; }
+.howto .mods svg { width: 20px; height: 20px; flex: none; margin-top: 1px; }
+
 /* ------------------------------------------------------------------ Schmale Displays (iPhone hochkant) */
 @media (max-width: 480px) {
   .screen-game { gap: 7px; }
@@ -401,13 +525,38 @@ button.arrow:active:not(:disabled) .arrow-key { transform: translateY(2px); box-
   .controls { gap: 8px; }
   .controls .pill { font-size: .9rem; gap: 6px; }
   .help { font-size: .7rem; }
+  .target-card { padding: 6px 10px 7px; gap: 3px; }
+  .slot { width: 27px; height: 29px; font-size: 1rem; }
+  .modstatus { font-size: .72rem; gap: 4px; padding: 2px 8px; }
+  .mod-chip svg { width: 14px; height: 14px; }
+  .controls .pill.toggle .lbl { display: none; }      /* schmal: Vorschau-Schalter nur als Auge (aria-label bleibt) */
+  .controls .pill.toggle { padding: 8px 12px; }
+  .controls { width: 100%; gap: 7px; flex-wrap: nowrap; }
+  .controls .pill { padding: 8px 6px; gap: 5px; white-space: nowrap; }
+  #btn-hint > svg.ic { display: none; }               /* schmal: Glühbirne weglassen, Zähler bleibt sichtbar */
 }
+/* Niedrige Spiel-Ansicht (iPhone in Safari ~660 px): etwas kompakter, gleiche Optik */
+@media (max-height: 760px) {
+  .screen-game { gap: 5px; }
+  .screen-game .title { font-size: 1.85rem; }
+  .screen-game .tagline { font-size: .72rem; }
+  .screen-game .hud-pill { height: 44px; }
+  .screen-game .hud-combo { height: 48px; }
+  .screen-game .controls .pill { min-height: 46px; }
+  .target-card { padding: 4px 10px 5px; gap: 2px; }
+  .slot { height: 26px; width: 25px; font-size: .95rem; border-radius: 8px; }
+  :root { --board: max(264px, min(430px,
+    calc(100vw - 2 * var(--arrow) - 2 * var(--pad-x) - var(--safe-l) - var(--safe-r)),
+    calc(100dvh - 396px - var(--safe-t) - var(--safe-b)))); }
+}
+/* iPhone-Höhe: Hilfetext steht im „So geht's“-Dialog, unten bleibt Platz fürs Brett */
+@media (max-height: 900px) and (max-width: 480px) { #game > .help { display: none; } }
 @media (max-width: 360px) {
-  .pill-sm span { display: none; }   /* ganz schmal: „Runde beenden“ nur als Icon (aria-label bleibt) */
+  .pill-sm span { display: none; }   /* ganz schmal: „Was passiert?“ nur als Icon (aria-label bleibt) */
 }
 @media (prefers-reduced-motion: reduce) {
   .pill, .hud-combo, #word-flash, #combo-pop, .modal, .modal-card, .screen { transition: none; }
-  .bob, #board.intro .tile .face { animation: none; }
+  .bob, #board.intro .tile .face, .tile.planted .face, .tile.bloom .face, #bloom::before, #bloom svg { animation: none; }
 }
 /* Niedrige Displays: Startseite kompakter */
 @media (max-height: 700px) {

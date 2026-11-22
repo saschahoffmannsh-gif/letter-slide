@@ -1,6 +1,6 @@
 {
-  "name": "Letter Slide",
-  "short_name": "Letter Slide",
+  "name": "Wortgarten",
+  "short_name": "Wortgarten",
   "description": "Deutsches Wort-Schiebepuzzle (Prototyp)",
   "lang": "de",
   "start_url": "./index.html",

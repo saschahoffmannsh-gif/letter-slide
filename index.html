@@ -9,12 +9,12 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Letter Slide">
+<meta name="apple-mobile-web-app-title" content="Wortgarten">
 <meta name="format-detection" content="telephone=no">
 <!-- manifest.webmanifest wird von src/main.js eingebunden, sobald die Seite über http(s) läuft -->
-<title>Letter Slide</title>
+<title>Wortgarten</title>
 <!-- Inline-Icon (keine Asset-Datei, verhindert 404 auf /favicon.ico) -->
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23FBF3E4'/%3E%3Crect x='8' y='8' width='48' height='48' rx='13' fill='%23BFE6D3'/%3E%3Ctext x='32' y='45' font-family='Arial Rounded MT Bold,Arial' font-size='34' font-weight='900' text-anchor='middle' fill='%234A3426'%3EL%3C/text%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23FBF3E4'/%3E%3Crect x='8' y='8' width='48' height='48' rx='13' fill='%23BFE6D3'/%3E%3Ctext x='32' y='45' font-family='Arial Rounded MT Bold,Arial' font-size='34' font-weight='900' text-anchor='middle' fill='%234A3426'%3EW%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -37,6 +37,14 @@
     <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.6 2.3c-.8.4-1.2 1-1.2 1.8v.4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><circle cx="12" cy="17.2" r="1.4" fill="currentColor"/></symbol>
     <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
     <symbol id="i-infinity" viewBox="0 0 24 24"><path d="M12 12c-2-2.6-3.6-4-5.5-4a4 4 0 0 0 0 8c1.9 0 3.5-1.4 5.5-4zm0 0c2 2.6 3.6 4 5.5 4a4 4 0 0 0 0-8c-1.9 0-3.5 1.4-5.5 4z" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/></symbol>
+    <!-- Modifikatoren (Stein, Brunnen, Trieb) und neue Buttons -->
+    <symbol id="i-stone" viewBox="0 0 24 24"><path d="M5.5 17.5c-1.6-.4-2.4-2-1.8-3.6l1.7-4.6c.5-1.4 1.7-2.4 3.2-2.6l4.6-.6c1.7-.2 3.3.6 4.2 2l2 3.3c1.1 1.8.6 4.1-1.1 5.3-1.2.9-2.7 1.3-4.2 1.3H8.3c-1 0-1.9-.1-2.8-.5z" fill="#B8B0A6" stroke="#8E857B" stroke-width="1.4" stroke-linejoin="round"/><path d="M8.5 10.5l2.5-.6M13.5 13.5l2.3.8" stroke="#E4DED6" stroke-width="1.4" stroke-linecap="round"/></symbol>
+    <symbol id="i-drop" viewBox="0 0 24 24"><path d="M12 3.2c3.3 4.2 6 7.4 6 10.6a6 6 0 0 1-12 0c0-3.2 2.7-6.4 6-10.6z" fill="#7FB8E6" stroke="#4E8FC6" stroke-width="1.4" stroke-linejoin="round"/><path d="M9.3 14.2a2.8 2.8 0 0 0 2.4 2.7" fill="none" stroke="#E3F1FC" stroke-width="1.6" stroke-linecap="round"/></symbol>
+    <symbol id="i-sprout" viewBox="0 0 24 24"><path d="M12 21v-8.5" stroke="#6FA85A" stroke-width="2.2" stroke-linecap="round"/><path d="M12 13.5C11.6 9.6 8.6 7.4 4.6 7.6c.2 3.9 3.2 6.2 7.4 5.9z" fill="#9CD27F" stroke="#6FA85A" stroke-width="1.3" stroke-linejoin="round"/><path d="M12 11.5c.4-3.6 3.3-5.8 7.2-5.6-.2 3.7-3.1 5.9-7.2 5.6z" fill="#B5E09A" stroke="#6FA85A" stroke-width="1.3" stroke-linejoin="round"/></symbol>
+    <symbol id="i-bulb" viewBox="0 0 24 24"><path d="M9 17.5h6M9.8 20.5h4.4" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M12 3.5a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1 2v.4h5.2v-.4c0-.8.4-1.5 1-2A6 6 0 0 0 12 3.5z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.8 12S6.2 5.8 12 5.8 21.2 12 21.2 12 17.8 18.2 12 18.2 2.8 12 2.8 12z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.9" fill="currentColor"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="2.6"/><path d="M15 15l5 5" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></symbol>
+    <symbol id="i-flower" viewBox="0 0 24 24"><g fill="#F7A9B8"><circle cx="12" cy="6.6" r="3.6"/><circle cx="17.2" cy="10.4" r="3.6"/><circle cx="15.2" cy="16.6" r="3.6"/><circle cx="8.8" cy="16.6" r="3.6"/><circle cx="6.8" cy="10.4" r="3.6"/></g><circle cx="12" cy="12" r="3" fill="#FFD24D" stroke="#E9A92B" stroke-width="1.2"/></symbol>
     <!-- Wolkenform für das Combo-Badge -->
     <symbol id="i-cloud" viewBox="0 0 120 84" preserveAspectRatio="none"><path d="M30 14c6-10 22-12 30-4 8-8 24-6 29 5 13-1 22 10 18 21 9 6 8 20-2 25 1 12-12 19-23 14-6 9-22 10-29 2-9 6-23 3-26-7-12 1-19-11-14-20-9-6-7-20 4-23-1-9 6-15 13-13z" fill="var(--combo-bg)" stroke="var(--combo-edge)" stroke-width="2.5" stroke-dasharray="5 4"/></symbol>
   </defs>
@@ -46,25 +54,29 @@
 <section id="start" class="screen screen-start" aria-label="Startseite">
   <div class="start-logo">
     <div class="confetti" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
-    <h1 class="title title-big" aria-label="Letter Slide"><span class="t-letter">LETTER</span><br><span class="t-slide">SLIDE</span></h1>
+    <h1 class="title title-big" aria-label="Wortgarten"><span class="t-letter">WORT</span><br><span class="t-slide">GARTEN</span></h1>
     <!-- Deko-Kachelreihe, die sanft wippt -->
     <div class="bob-row" aria-hidden="true">
       <span class="bob">W</span><span class="bob">O</span><span class="bob">R</span><span class="bob">T</span>
     </div>
-    <p class="start-tagline">Schieben. Wörter finden. Kaskaden auslösen.</p>
+    <p class="start-tagline">Schieben. Zielwort finden. Den Garten wachsen lassen.</p>
   </div>
 
   <div class="start-actions">
-    <button type="button" id="start-daily" class="pill pill-big pill-mint">
+    <button type="button" id="start-level" class="pill pill-big pill-mint">
       <svg class="ic" aria-hidden="true"><use href="#i-play"/></svg>
+      <span class="stack"><span class="main" id="start-level-title">Level 1 spielen</span><span class="sub" id="start-level-sub">–</span></span>
+    </button>
+    <button type="button" id="start-daily" class="pill pill-peach pill-mid">
+      <svg class="ic" aria-hidden="true"><use href="#i-flower"/></svg>
       <span class="stack"><span class="main" id="start-daily-title">Tagesrätsel</span><span class="sub" id="start-daily-sub">–</span></span>
     </button>
     <button type="button" id="start-share" class="pill pill-lavender pill-mid" hidden>
       <svg class="ic" aria-hidden="true"><use href="#i-share"/></svg><span>Ergebnis teilen</span>
     </button>
-    <button type="button" id="start-endless" class="pill pill-peach pill-mid">
+    <button type="button" id="start-free" class="pill pill-lavender pill-mid">
       <svg class="ic" aria-hidden="true"><use href="#i-infinity"/></svg>
-      <span class="stack"><span class="main">Endlos</span><span class="sub" id="start-endless-sub">Noch kein Rekord</span></span>
+      <span class="stack"><span class="main">Freies Spiel</span><span class="sub">Zufallsbrett · Modifikatoren ausprobieren</span></span>
     </button>
     <div class="start-row">
       <button type="button" id="start-howto" class="pill pill-cream"><svg class="ic" aria-hidden="true"><use href="#i-help"/></svg><span>So geht's</span></button>
@@ -81,7 +93,7 @@
 <section id="game" class="screen screen-game off" aria-label="Spiel" hidden>
 <header id="top">
   <div class="confetti" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
-  <h1 class="title" aria-label="Letter Slide"><span class="t-letter">LETTER</span> <span class="t-slide">SLIDE</span></h1>
+  <h1 class="title" aria-label="Wortgarten"><span class="t-letter">WORT</span><span class="t-slide">GARTEN</span></h1>
   <!-- Gestrichelte Linie mit Herz und dem aktuellen Modus -->
   <div class="tagline"><span class="dash"></span><span id="stat-mode">–</span><svg class="heart"><use href="#i-heart"/></svg><span class="dash"></span></div>
 </header>
@@ -89,7 +101,8 @@
 <nav class="menu" aria-label="Menü">
   <button type="button" id="btn-menu" class="pill pill-lavender pill-sm" aria-label="Menü"><svg class="ic"><use href="#i-home"/></svg><span>Menü</span></button>
   <button type="button" id="btn-howto" class="pill pill-cream pill-sm pill-icon" aria-label="So geht's"><svg class="ic"><use href="#i-help"/></svg></button>
-  <button type="button" id="btn-end" class="pill pill-cream pill-sm" aria-label="Runde beenden"><svg class="ic"><use href="#i-flag"/></svg><span>Runde beenden</span></button>
+  <button type="button" id="btn-whatif" class="pill pill-cream pill-sm" aria-label="Was passiert, wenn?"><svg class="ic"><use href="#i-search"/></svg><span>Was passiert?</span></button>
+  <button type="button" id="btn-share" class="pill pill-cream pill-sm pill-icon" aria-label="Teilen"><svg class="ic"><use href="#i-share"/></svg></button>
   <button type="button" id="btn-mute" class="pill pill-cream pill-sm pill-icon btn-mute" aria-label="Ton aus"><svg class="ic"><use href="#i-sound"/></svg></button>
 </nav>
 <div id="hud">
@@ -101,27 +114,42 @@
   </div>
 </div>
 
+<!-- Zielwort-Feld: Hinweis, Länge, Platzhalter (aufgedeckte Buchstaben aus Hinweisen) -->
+<div id="target" class="target-card" aria-live="polite">
+  <div class="target-top"><span class="label">ZIELWORT</span><span id="target-hint" class="target-hint">–</span></div>
+  <div id="target-slots" class="target-slots" aria-label="Zielwort"></div>
+  <!-- Aktive Modifikatoren: „Stein: 2 | Brunnen: 1 | Trieb: 0“ -->
+  <div id="modstatus" class="modstatus" aria-label="Modifikatoren">
+    <span class="mod-chip" data-type="stein"><svg aria-hidden="true"><use href="#i-stone"/></svg>Stein: <b id="count-stein">0</b></span><i class="sep">|</i>
+    <span class="mod-chip" data-type="brunnen"><svg aria-hidden="true"><use href="#i-drop"/></svg>Brunnen: <b id="count-brunnen">0</b></span><i class="sep">|</i>
+    <span class="mod-chip" data-type="trieb"><svg aria-hidden="true"><use href="#i-sprout"/></svg>Trieb: <b id="count-trieb">0</b></span>
+  </div>
+  <div id="hint-line" class="hint-line" hidden></div>
+</div>
+
 <div id="playfield">
   <div class="arrows h" id="arrows-top"></div>
   <div class="arrows v" id="arrows-left"></div>
   <div id="board" role="grid" aria-label="Buchstabengitter"></div>
   <div class="arrows v" id="arrows-right"></div>
   <div class="arrows h" id="arrows-bottom"></div>
-  <div id="ended-overlay"><div class="card"><strong>Runde beendet</strong><span id="ended-summary"></span><small>Reset oder Modus wählen</small></div></div>
+  <div id="ended-overlay"><div class="card"><strong id="ended-title">Gelöst!</strong><span id="ended-summary"></span><small>Reset oder nächstes Level</small></div></div>
   <div id="word-flash"><div class="words"></div><div class="pts"></div></div>
+  <div id="bloom" aria-hidden="true"></div>
   <div id="combo-pop"><svg class="cloud" aria-hidden="true"><use href="#i-cloud"/></svg><span>COMBO ×2</span></div>
 </div>
 
 <div class="controls" id="controls">
   <button type="button" id="btn-undo" class="pill pill-mint" aria-label="Rückgängig"><svg class="ic"><use href="#i-undo"/></svg><span>Undo</span></button>
   <button type="button" id="btn-reset" class="pill pill-peach"><svg class="ic"><use href="#i-reset"/></svg><span>Reset</span></button>
-  <button type="button" id="btn-share" class="pill pill-lavender"><svg class="ic"><use href="#i-share"/></svg><span>Teilen</span></button>
+  <button type="button" id="btn-hint" class="pill pill-lavender" aria-label="Hinweis"><svg class="ic"><use href="#i-bulb"/></svg><span>Hinweis <b id="hint-count" class="count">3</b></span></button>
+  <button type="button" id="btn-preview" class="pill pill-cream toggle" aria-pressed="true" aria-label="Vorschau an/aus" title="Vorschau: Modifikator-Felder vor dem Zug aufblitzen lassen"><svg class="ic"><use href="#i-eye"/></svg><span class="lbl">Vorschau</span></button>
 </div>
 
 <p class="help">
-  Wische auf einer Kachel waagerecht, um ihre Zeile zu verschieben, oder senkrecht für ihre Spalte –
-  oder tippe auf die Pfeile am Rand. Tastatur: Kachel antippen/Shift+Pfeile wählt aus, Pfeiltasten
-  verschieben, Strg+Z = Undo. Wörter ab 3 Buchstaben waagerecht oder senkrecht werden abgeräumt.
+  Wische eine Zeile oder Spalte (oder tippe die Pfeile am Rand). Bilde das Zielwort waagerecht oder
+  senkrecht. Kurze Wörter (3–5) zerbröseln und pflanzen Steine, Brunnen und Triebe.
+  Tastatur: Shift+Pfeile wählt, Pfeile schieben, Strg+Z = Undo.
 </p>
 
 <div class="deco" aria-hidden="true">
@@ -139,9 +167,10 @@
   </div>
 </div>
 
-<!-- Reihenfolge wichtig: Konfiguration -> Logik -> Statistik -> Sound -> Partikel -> Rendering -> Eingabe -> Verdrahtung.
+<!-- Reihenfolge wichtig: Konfiguration -> Level -> Logik -> Statistik -> Sound -> Partikel -> Rendering -> Eingabe -> Verdrahtung.
      Klassische Scripts (keine ES-Module), damit index.html auch direkt per file:// läuft. -->
 <script src="src/config.js"></script>
+<script src="src/levels.js"></script>
 <script src="src/logic.js"></script>
 <script src="src/stats.js"></script>
 <script src="src/audio.js"></script>

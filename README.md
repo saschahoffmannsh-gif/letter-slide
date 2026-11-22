@@ -1,55 +1,91 @@
-# Letter Slide
+# Wortgarten
 
-Ein deutsches Wort-Schiebepuzzle – spielbarer Prototyp. Reines HTML/CSS/JavaScript,
-**keine Abhängigkeiten, kein Build-Schritt, keine Assets**. Optimiert für das iPhone
-(hochkant, Touch), läuft aber genauso am Desktop.
+Ein deutsches Wort-Schiebepuzzle mit **Zielwort pro Level** und **Modifikatoren** (Stein, Brunnen,
+Trieb). Reines HTML/CSS/JavaScript, **keine Abhängigkeiten, kein Build-Schritt, keine Bilddateien**.
+Optimiert fürs iPhone (hochkant, Touch), läuft genauso am Desktop. Live:
+<https://saschahoffmannsh-gif.github.io/letter-slide/>
 
-Die vollständige Original-Spezifikation steht in [`docs/SPEC.md`](docs/SPEC.md).
+Hervorgegangen aus dem Prototyp *Letter Slide* (Stand eingefroren als Git-Tag `letter-slide-v1`).
+Das Design (Pastell-Candy, weiße Kacheln, Zerbröseln mit Rieselgeräusch, Touch-Optimierung) ist
+unverändert übernommen; neue Elemente nutzen dieselben Komponenten und Theme-Variablen.
 
 ## Spielidee & Regeln
 
-- 6×6-Gitter, jede Zelle enthält einen Großbuchstaben.
-- **Einzige Aktion:** eine Zeile oder Spalte zyklisch um genau ein Feld verschieben
-  (was rausfällt, kommt auf der anderen Seite wieder rein). Jeder Slide = ein Zug.
-- Nach jedem Slide werden alle Zeilen und Spalten geprüft: Jede zusammenhängende
-  Buchstabenfolge (≥ 3) aus der Wortliste wird gelöscht – alle Treffer gleichzeitig,
-  auch überlappende und sich kreuzende. Teilwörter, die komplett in einem längeren
-  Treffer derselben Linie stecken, zählen nicht extra (HAUS zählt nicht zusätzlich AUS).
-- Danach fallen die Buchstaben nach unten, neue fallen von oben nach. Entstehen dabei
-  neue Wörter, läuft eine **Kaskade** – jede Stufe erhöht den Combo-Multiplikator.
-- **Punkte:** 3 Buchstaben = 10, 4 = 25, 5 = 60, 6+ = 150, multipliziert mit
-  `1 + 0,5 × (Kaskadenstufe − 1)` (Stufe 1 = ×1, Stufe 2 = ×1,5, Stufe 3 = ×2 …).
-  Punkte einer Stufe = gerundete Summe aller Wörter dieser Stufe × Multiplikator.
-- Kein Zeitlimit, kein Game Over. „Runde beenden“ hält den Score fest.
+- 6×6-Gitter mit Großbuchstaben. **Einzige Aktion:** eine Zeile oder Spalte zyklisch um ein Feld
+  schieben (= 1 Zug). Wischen auf einer Kachel, Randpfeile oder Tastatur.
+- Jedes Level hat ein **Zielwort** mit Hinweis, z. B. *„etwas Warmes – 6 Buchstaben“* und Slots
+  `_ _ _ _ _ _`. Steht das Zielwort waagerecht (links→rechts) oder senkrecht (oben→unten) **exakt**
+  als zusammenhängende Folge im Gitter (nicht nur als Teil eines längeren Worts), ist das Level
+  gelöst: das Wort blüht auf, Dialog *„Level X gelöst! Y Punkte. Züge: N.“* → **Nächstes Level**.
+- **Kurze Wörter** (3–5 Buchstaben aus der Wortliste, nicht das Zielwort) werden wie bisher
+  gelöscht (Zerbröseln), geben **0 Punkte**, aber **pflanzen einen Modifikator** – je nach Lage:
 
-### Modi
+| Lage des kurzen Worts | Modifikator | Wirkung |
+|---|---|---|
+| berührt eines der 4 Mittelfelder | **Trieb** (grün, Blatt) | ein freies Nachbarfeld bekommt einen seltenen Buchstaben (Q/X/Y/J) |
+| waagerecht in der unteren Hälfte (Zeile 4–6) oder senkrecht links (Spalte 1–3) | **Stein** (grau, Stein) | Buchstabe ist fixiert: wird beim Schieben übersprungen, fällt nicht |
+| senkrecht rechts (Spalte 4–6) oder waagerecht oben (Zeile 1–3) | **Brunnen** (blau, Tropfen) | Zielwort-Buchstaben auf Brunnen **verdoppeln** die Punkte |
 
-| Modus | Verhalten |
+- Danach fallen Buchstaben nach unten, oben wird nachgefüllt; neue Wörter lösen **Kaskaden** aus.
+- **Punkte fürs Zielwort:** `Länge × 10 × 2^(Brunnen im Wort) × (1 + 0,5 × Kaskaden) × (1 − 0,2 × Hinweise)`.
+  Gesamtpunkte = Summe der besten Ergebnisse aller Level.
+- **Vorschau** (Schalter mit Auge, standardmäßig an): vor jedem Zug blitzen die Felder, auf denen
+  ein Modifikator entstehen würde, 800 ms gelb auf (mit Typ-Icon). Zusätzlich listet
+  **„Was passiert?“** alle Züge, die gerade Modifikatoren pflanzen würden (Felder A–F / 1–6).
+- **Hinweis** (3 pro Level, kostet je 20 % der Level-Punkte): zeigt einen fehlenden Buchstaben des
+  Zielworts, seine Position im Wort und die ungefähre Lage im Gitter; der Slot wird aufgedeckt.
+- **Undo** (bis 50 Schritte, stellt auch Steine, Brunnen, Triebe und den Zufallszustand wieder her),
+  **Reset** (Level neu, gleiches Brett), **Teilen** (`Wortgarten Level 7 · 120 Punkte · 4 Züge`).
+
+### Modi (Startseite)
+
+| Knopf | Verhalten |
 |---|---|
-| **Tagesrätsel** | Seed aus dem lokalen Datum (`YYYY-MM-DD`, FNV-1a-Hash). Alle bekommen am selben Tag dasselbe Brett und dieselben Nachfüll-Buchstaben. Nummer = Tage seit 01.01.2026 + 1. „Reset“ startet das Tagesrätsel neu (gleiches Brett). |
-| **Endlos** | Zufälliger Seed bei jedem Start, unbegrenzt spielbar. |
+| **Level N spielen** | 12 handgebaute Level, Fortschritt in `localStorage` (Schlüssel `wortgartenStats.v1`) |
+| **Tagesrätsel #N** | ein Level pro Tag, gleich für alle (Seed aus dem lokalen Datum → Level `n mod 12` + eigene Nachfüll-Buchstaben) |
+| **Freies Spiel** | Zufallsbrett ohne Zielwort, alle Modifikatoren aktiv – zum Ausprobieren |
+| **So geht's** | Regeln, Modifikator-Tabelle, Punkteformel |
 
-Das Startbrett wird deterministisch so lange neu gewürfelt, bis es keine Wörter enthält.
+Tutorial-Popups erscheinen einmalig: Level 1 (Ziel), 4 (Stein), 7 (Brunnen), 10 (Trieb) und beim
+ersten Entstehen jedes Modifikators.
 
-### Bedienung
+### Level-Progression
 
-- **Wischen (Touch/Maus):** auf einer Kachel waagerecht wischen → ihre Zeile rückt ein
-  Feld in diese Richtung; senkrecht wischen → ihre Spalte. Kurz tippen = Kachel auswählen.
-- **Randpfeile:** ▲ ▼ ◀ ▶ an jeder Zeile/Spalte.
-- **Tastatur:** Kachel anklicken oder Shift+Pfeile wählt aus, Pfeiltasten verschieben
-  die Zeile (←/→) bzw. Spalte (↑/↓), Strg/Cmd+Z = Undo.
-- **Undo** (bis zu 50 Schritte, inkl. Zufallsgenerator-Zustand), **Reset**, **Teilen**
-  (kopiert z. B. `Letter Slide #326 · 4 Züge · 62 Punkte · 🔥🔥🔥` – 🔥-Anzahl = höchste
-  Kaskadenstufe, kein Brett-Spoiler), **Runde beenden**, 🔊/🔇 Ton.
+| Level | Modifikatoren | Zielwörter |
+|---|---|---|
+| 1–3 | keine (Tutorial: 1 / 3 / 6 Züge) | WAERME, MOND, KATZE |
+| 4–6 | Stein | BLUME, REGEN, BAUM |
+| 7–9 | Stein + Brunnen | WASSER, SONNE, KAFFEE |
+| 10–12 | Stein + Brunnen + Trieb | GARTEN, FUCHS, WINTER |
 
-## Starten
+Jedes Level ist **beweisbar lösbar** (Referenzlösung in `src/levels.js`, geprüft von
+`tests/levels.test.js` unter den echten Regeln inkl. Kaskaden). Per Löser bewiesen: Level 1 braucht
+genau 1 Zug, Level 2 mindestens 3, Level 3 mindestens 6 (`FULL=1 npm test`).
 
-- **Lokal:** `index.html` einfach im Browser öffnen (Doppelklick, `file://` funktioniert –
-  es werden bewusst klassische `<script>`-Tags statt ES-Modulen verwendet).
-- **Auf dem iPhone / mit Home-Bildschirm-Icon:** über einen beliebigen statischen Webserver
-  ausliefern (z. B. `npx serve .` oder `python3 -m http.server`) und in Safari öffnen →
-  Teilen → „Zum Home-Bildschirm“. Das Web-Manifest wird nur über http(s) eingebunden
-  (über `file://` würde der Browser sonst einen Fehler melden).
+## Design-Entscheidungen (Spec-Lücken)
+
+- **Stein beim Schieben:** Steine bleiben stehen, die übrigen Felder der Linie rotieren zyklisch um
+  sie herum. Besteht eine Linie nur aus Steinen, sind ihre Pfeile deaktiviert.
+- **Kurze Wörter** werden gelöscht (Zerbröseln, 0 Punkte); ihr Modifikator wird **nach** Fallen +
+  Nachfüllen gepflanzt, die Position wird aus den Koordinaten **vor** dem Löschen berechnet.
+- **Vorrang**, wenn mehrere Regeln passen: Mitte/Trieb vor Stein vor Brunnen; ist der passende Typ
+  im Level nicht aktiv, entsteht nichts (kein Ersatz-Typ).
+- **Zielfeld:** liegt es außerhalb des Bretts, wird das nächste gültige Feld genommen (geklemmt);
+  ist es schon belegt (Modifikator), das nächstgelegene freie Feld (`nearestFree`).
+- **Schwerkraft** überspringt Steine (sie schweben fest). **Brunnen** ist eine Eigenschaft des
+  Feldes (bleibt liegen, Buchstaben laufen durch). **Trieb** gehört zum Buchstaben und fällt mit.
+- **Trieb:** ersetzt den Buchstaben des nächsten freien Feldes im Uhrzeigersinn um das Wort
+  (Start oben links) durch Q/X/Y/J – Auswahl per geseedetem Zufall (Mulberry32).
+- **Zielwort** zählt nur exakt (nicht als Teil eines längeren Worts) und wird nie als kurzes Wort
+  gelöscht. Geprüft wird vor jeder Lösch-Runde, also auch mitten in einer Kaskade.
+- **Nachfüllen** ist deterministisch (Seed `wortgarten:<id>` bzw. `wortgarten-daily:<datum>`):
+  gleiche Züge → gleiches Ergebnis, Undo/Reset exakt.
+- **Zielwortlänge 4–6:** 7 Buchstaben passen nicht in ein 6×6-Gitter (Spec-Beispiele mit 7 wurden
+  ersetzt). Umlaute werden ausgeschrieben (WÄRME → WAERME).
+- Das Level-1-Beispiel der Spec enthielt das Zielwort schon im Startbrett; Zeile 1 ist daher um ein
+  Feld verdreht (Lösung: Zeile 1 nach links).
+- Abweichend von der Spec bleibt es beim bestehenden Multi-Datei-Projekt mit dem fertigen Design
+  statt „eine HTML-Datei mit Platzhaltergrafik“.
 
 ## iPhone-/Touch-Optimierung
 
@@ -69,27 +105,14 @@ Das Startbrett wird deterministisch so lange neu gewürfelt, bis es keine Wörte
   (Icon als Inline-SVG, keine Bilddatei). Hinweis: iOS nutzt für das Home-Icon kein SVG –
   dort erscheint ein Screenshot, bis ein PNG-`apple-touch-icon` ergänzt wird.
 
-## Startseite
-
-Beim Laden erscheint die Startseite: großes Logo, wippende Deko-Kacheln, Kurz-Slogan,
-großer Knopf **„Tagesrätsel #N“** (mit Datum), **„Endlos“** (mit Rekord), **„So geht's“**
-(Regeln + Punktetabelle, Werte live aus `config.js`) und Ton an/aus. Ist das heutige
-Tagesrätsel schon beendet, zeigt der Knopf das Ergebnis und es gibt **„Ergebnis teilen“**.
-Im Spiel führt **„Menü“** zurück (mit Rückfrage im In-Game-Dialog, falls eine Runde läuft).
-
-Gespeichert wird in `localStorage` (Schlüssel `letterSlideStats.v1`, Modul `src/stats.js`):
-bestes Tagesergebnis pro Datum (die letzten 60 Tage) und der Endlos-Rekord (beim Beenden
-oder Verlassen einer Endlos-Runde). Ohne `localStorage` (Privatmodus) läuft alles weiter,
-nur ohne Speichern.
-
 ## Zerbröseln (Auflösen von oben nach unten)
 
-Bei einem Treffer leuchten die Kacheln kurz golden, dann lösen sie sich **von oben nach unten**
+Kurze Wörter (3–5 Buchstaben) leuchten kurz golden, dann lösen sie sich **von oben nach unten**
 auf (`src/particles.js`). Die DOM-Kachel wird ausgeblendet und auf einer Vollbild-`<canvas>`
 (pointer-events: none) weitergezeichnet. Eine waagerechte Front läuft in ~550 ms (ease-in-out)
 von der Oberkante bis zur Unterkante:
 
-- jede Kachel zerfällt in ~850–900 Körner (1–2,5 px, ein paar 3 px): weiß, hellgrau, warmgrau,
+- jede Kachel zerfällt in ~850–900 Körner (1–2,5 px, ein paar 3 px) in den Farben ihrer Kachel (weiß bzw. Stein-grau, Brunnen-blau, Trieb-grün – gelesen aus `--c/--s/--d` der Kachel), hellgrau, warmgrau,
   viele dunkelbraune Buchstaben-Körner und goldene Funken; fast die Hälfte der hellen Körner hat
   eine 1-px-Schattenseite, damit sie auf dem Cremegrund sichtbar bleiben;
 - oberhalb der Front rieseln die Körner als dichter Sand-Strahl nach unten, über das Brett hinaus
@@ -117,116 +140,131 @@ Partikeldichte (gesamt gedeckelt), die Lautstärke nicht. Die Hüllkurve folgt d
   `SHADOW_RATE`), Timing in `ANIM` (`src/render.js`). `LetterSlideParticles.timeScale = 0.25` =
   Zeitlupe (nur für Tests/Screenshots).
 
-## Design: „Pastell-Candy“
+## Design: „Pastell-Candy“ (unverändert)
 
-Cremefarbener Hintergrund, Bonbon-Titel (LETTER koralle, SLIDE lavendel), **weiße Kacheln** mit
-dunkelbraunen Buchstaben und warmgrauer Unterkante (Tiefe), ausgewählte Zeile/Spalte zart
-lavendel, goldenes Aufleuchten bei Treffern; Pfeile, HUD und Knöpfe bleiben pastell,
-HUD als Pillen (Punkte mit Stern, Züge) plus orangefarbene Combo-Wolke. Alles reines CSS und
-Inline-SVG (Icons als `<symbol>` in `index.html`), keine Bilddateien, keine Webfonts
-(abgerundeter System-Font-Stack: `ui-rounded`, „SF Pro Rounded“, …).
+Cremefarbener Hintergrund, Bonbon-Titel (**WORT** koralle, **GARTEN** lavendel), **weiße Kacheln**
+mit dunkelbraunen Buchstaben, Pfeile, HUD und Knöpfe in Pastell, Combo-Wolke, eigene In-Game-Dialoge.
+Neu, aber im selben Stil: Zielwort-Karte mit Slots und Hinweiszeile, Modifikator-Status
+(„Stein: 2 | Brunnen: 1 | Trieb: 0“, inaktive Typen ausgegraut), Vorschau-Schalter, Hinweis-Knopf.
 
-- **Theme ändern:** alle Farben, Schrift und Maße stehen als CSS-Variablen oben in
-  `css/style.css` (`--bg`, `--ink`, `--tile-face`, `--tile-shade`, `--tile-edge`, `--tile-ink`, `--hit`, `--mint`, `--combo-bg` …).
-- **Kachelfarbe je Buchstabe:** Tabelle `TILE_COLOR_BY_LETTER` in `src/render.js`
-  (bleibt beim Schieben stabil, häufige Buchstaben sind auf alle vier Farben verteilt).
-- **Dialoge:** Bestätigung („Aktuelle Runde verwerfen?“), Teilen und Rundenende laufen über
-  ein eigenes In-Game-Modal (`View.modal()` in `src/render.js`) statt `confirm()`/`alert()`;
-  Escape oder Tippen auf den Hintergrund schließt.
+- **Modifikator-Kacheln** behalten die Kachelform, nur Tönung, Muster und Icon ändern sich:
+  Stein grau mit Stein-Icon, Brunnen blau mit Wellenmuster + Tropfen, Trieb grün mit Sprossenmuster
+  + Blatt (Muster als Inline-SVG-Data-URI). Farben als CSS-Variablen `--stein-*`, `--brunnen-*`,
+  `--trieb-*`, `--preview` oben in `css/style.css`.
+- Icons als `<symbol>` in `index.html` (`i-stone`, `i-drop`, `i-sprout`, `i-bulb`, `i-eye`, …).
 
 ## Ordnerstruktur
 
 ```
-letter-slide/
-├── index.html              # dünne Hülle: Markup + Script-Reihenfolge
-├── manifest.webmanifest    # Web-App-Manifest (Home-Bildschirm)
-├── css/style.css           # Platzhalter-Optik, Animationen, Mobil-Layout
+letter-slide/                # Repo-Name bleibt (GitHub Pages-URL)
+├── index.html               # Markup + Script-Reihenfolge
+├── manifest.webmanifest
+├── css/style.css            # Theme-Variablen, Layout, Animationen, Modifikator-Optik
 ├── src/
-│   ├── config.js           # Wortliste, Buchstaben-Gewichtung, Punkte, Limits, MODES
-│   ├── logic.js            # reine Spiellogik (kein DOM, in Node ladbar)
-│   ├── stats.js            # Tagesergebnis + Endlos-Rekord (localStorage, in Node ladbar)
-│   ├── audio.js            # optionaler WebAudio-Sound (Klick, Wort-Ton, Rieseln) + iOS-Unlock
-│   ├── particles.js        # Canvas-Partikel fürs Zerbröseln
-│   ├── render.js           # DOM-Rendering, HUD, Animationen
-│   ├── input.js            # Buttons, Wischgesten (Pointer Events), Tastatur
-│   └── main.js             # Verdrahtung, Startseite <-> Spiel, Eingabesperre, Teilen, Statistik
+│   ├── config.js            # Wortliste, Gewichtung, Punkte, MODIFIER_RULES, Hinweise, MODES
+│   ├── levels.js            # die 12 Level (Zielwort, Hinweis, Grid, Modifikatoren, Referenzlösung)
+│   ├── logic.js             # reine Spiellogik (kein DOM, in Node ladbar)
+│   ├── stats.js             # Fortschritt, Bestwerte, Tagesrätsel, Tipps (localStorage)
+│   ├── audio.js             # WebAudio: Klick, Wort, Rieseln, Pflanzen, Vorschau-Ping, Aufblühen
+│   ├── particles.js         # Canvas-Partikel fürs Zerbröseln
+│   ├── render.js            # DOM-Rendering, HUD, Zielwort, Animationen, Vorschau, Dialoge
+│   ├── input.js             # Buttons, Wischgesten, Tastatur
+│   └── main.js              # Ablauf, Startseite, Level-Abschluss, Hinweis, Tutorial-Popups
+├── tools/
+│   ├── level-tools.js       # Replay, exhaustiver Löser (IDDFS), Beam-Suche
+│   ├── solve-level.js       # CLI: node tools/solve-level.js <id> [--min N]
+│   └── generate-levels.js   # Entwickler-Generator für neue Level
 ├── tests/
-│   ├── logic.test.js       # Logik-Tests (node:test, keine Abhängigkeiten)
-│   ├── stats.test.js       # Tests der localStorage-Statistik
-│   ├── browser-smoke.js    # optionaler Headless-Chrome-Test (Desktop + iPhone 14)
-│   └── perf-dissolve.js    # optional: fps beim Auflösen (iPhone-Profil, 4× CPU-Drosselung)
-├── docs/SPEC.md            # Original-Spezifikation
+│   ├── logic.test.js        # Regeln, Modifikatoren, Vorschau, Zielwort, Hinweise, Undo
+│   ├── levels.test.js       # Level-Daten, Progression, Lösbarkeit (Löser)
+│   ├── stats.test.js        # localStorage: Fortschritt, Tagesrätsel
+│   ├── browser-smoke.js     # optional: Headless-Chrome (Desktop + iPhone 14)
+│   └── perf-dissolve.js     # optional: fps beim Zerbröseln
+├── docs/SPEC.md             # ursprüngliche Letter-Slide-Spezifikation
 └── .github/workflows/test.yml
 ```
 
-Ladereihenfolge im Browser: `config.js → logic.js → stats.js → audio.js → particles.js → render.js → input.js → main.js`.
-Jede Datei legt ein Objekt global ab (`LetterSlideConfig`, `LetterSlideLogic`, …);
-`config.js` und `logic.js` exportieren in Node zusätzlich per `module.exports`.
+Ladereihenfolge: `config → levels → logic → stats → audio → particles → render → input → main`.
+Die globalen Objekte heißen aus Kompatibilitätsgründen weiter `LetterSlideConfig`,
+`LetterSlideLevels`, `LetterSlideLogic`, … (`config`, `levels`, `logic`, `stats` auch per
+`module.exports` in Node).
 
-Kernfunktionen in `src/logic.js`: `slideLine`, `findWords`, `checkBoard`, `clearWords`,
-`applyGravity`, `refill`, `cascade`, `undo`, `reset`, `startDaily`, `startEndless`
-(plus `performSlide`, `endRound`, `buildShareText`, `startMode`).
+Kernfunktionen in `src/logic.js`: `slideLine`, `findWords`, `checkTargetWord`, `findShortWords`,
+`placeModifier`, `planModifiers`, `applyModifiers`, `applyGravity`, `refill`, `cascade`,
+`targetScore`, `previewModifiers`, `whatIf`, `useHint`, `performSlide`, `undo`, `reset`,
+`loadLevel`, `nextLevel`, `startDaily`, `startFree`, `validateLevel`.
 
-## Anpassen
+## Anpassen (Kurzanleitung)
 
-Alles Folgende steht oben in **`src/config.js`**:
+### Neue Level hinzufügen
 
-- **Wortliste austauschen:** Inhalt des Template-Strings `WORD_LIST_RAW` ersetzen
-  (Wörter durch Leerzeichen/Zeilenumbruch getrennt, Zeilen mit `//` werden ignoriert).
-  `parseWordList()` in `logic.js` schreibt alles groß, entfernt Duplikate und alles, was
-  nicht A–Z mit 3–6 Buchstaben ist; daraus entsteht das Set `DICTIONARY`.
-  Die mitgelieferte Liste (993 Wörter) ist eine Beispiel-Liste und sollte vor einem
-  Release durch eine geprüfte ersetzt werden.
-- **Buchstaben-Gewichtung ändern:** `LETTER_WEIGHTS` (relative Häufigkeiten, werden
-  normalisiert). `USE_UNIFORM_LETTERS = true` → alle Buchstaben gleich wahrscheinlich.
-  Gezogen wird in `drawLetter()` mit dem geseedeten PRNG (Mulberry32).
-- **Punkteformel anpassen:** `SCORE_BY_LENGTH` (`{ 3: 10, 4: 25, 5: 60, 6: 150 }`, ab 6
-  gilt der Wert für 6) und `COMBO_STEP` (0,5) im Multiplikator
-  `comboMultiplier(level) = 1 + COMBO_STEP × (level − 1)`. Die Summe je Kaskadenstufe
-  wird in `cascade()` (`logic.js`) berechnet und gerundet.
-- **Weitere Stellschrauben:** `HISTORY_LIMIT` (Undo-Tiefe), `MAX_CASCADE_LEVELS`,
-  `DAILY_EPOCH` (Start der Rätselnummern), Animationsdauern in `ANIM` (`render.js`),
-  Wisch-Schwellen in `input.js`.
-- **Neuen Modus ergänzen:** Eintrag in `MODES` anlegen:
+1. In **`src/levels.js`** ein Objekt an das Array `LEVELS` anhängen:
+   ```js
+   {
+     id: 13, hint: "fliegt im Herbst", length: 6, target: "DRACHE",
+     grid: [["D","R","A","C","H","E"], /* … 6 Zeilen à 6 Buchstaben … */],
+     modifiersEnabled: { stein: true, brunnen: true, trieb: true },
+     solution: ["R2-", "C4+"]   // R = Zeile, C = Spalte, 1–6, + = rechts/unten, - = links/oben
+   }
+   ```
+2. Regeln: nur A–Z (Umlaute ausschreiben), Länge 4–6, Startbrett ohne Zielwort und ohne kurze
+   Wörter, alle Zielbuchstaben im Grid. `node tools/solve-level.js 13` prüft das Level und sucht eine
+   Lösung; Ein Brett aus einem Zielwort erzeugen: Eintrag in `SPECS` in `tools/generate-levels.js` ergänzen und `node tools/generate-levels.js 13` aufrufen.
+3. `npm test` – `tests/levels.test.js` prüft automatisch Daten, Lösbarkeit und Referenzlösung
+   (bei mehr als 12 Leveln die Zahl im ersten Test anpassen). Startseite, Kopfzeile
+   „Level X von N“ und Tagesrätsel richten sich nach `LEVELS.length`.
 
-  ```js
-  monthly: {
-    id: "monthly",
-    label: "Monatsrätsel",
-    seed: (ctx, h) => h.hashString("M-" + ctx.dateKey.slice(0, 7)), // gleicher Seed pro Monat (YYYY-MM)
-    shareTag: (state) => state.dateKey.slice(0, 7),
-    title: () => "Monatsrätsel"
-  }
-  ```
+### Modifikator-Regeln ändern
 
-  Der Button erscheint automatisch; `startMode("monthly")` startet ihn.
+In **`src/config.js`** → `MODIFIER_RULES`. Die Liste wird von oben nach unten geprüft, die erste
+passende Regel gewinnt (Reihenfolge = Vorrang). `w` ist das kurze Wort mit `axis` (`"row"`/`"col"`),
+`line` (0–5), `cells` (Feld-Indizes), `g` bietet Helfer wie `isCenter`:
+```js
+{ type: "brunnen", when: (w) => (w.axis === "col" && w.line >= 3) || (w.axis === "row" && w.line <= 2) }
+```
+Wo der Modifikator landet, steht in `targetCellFor()` (`logic.js`), die Trieb-Buchstaben in
+`RARE_LETTERS`, die Länge kurzer Wörter in `SHORT_MIN`/`SHORT_MAX`, die Vorschau-Dauer in
+`PREVIEW_MS`. Welche Typen ein Level erlaubt, steht pro Level in `modifiersEnabled`.
+
+### Punkteformel anpassen
+
+In **`src/config.js`**: `POINTS_PER_LETTER` (10), `BRUNNEN_FACTOR` (2 = Verdopplung pro
+Brunnen-Feld), `COMBO_STEP` (0,5 pro Kaskadenstufe), `HINTS_PER_LEVEL` (3), `HINT_PENALTY`
+(0,2 = −20 % pro Hinweis). Die Formel selbst steht in `targetScore()` in `src/logic.js`;
+Tests in `tests/logic.test.js` („targetScore …“) entsprechend anpassen.
+
+### Weiteres
+
+- **Wortliste:** `WORD_LIST_RAW` in `config.js` (993 Beispielwörter; vor einem Release prüfen).
+- **Buchstaben-Gewichtung fürs Nachfüllen:** `LETTER_WEIGHTS`, `USE_UNIFORM_LETTERS`.
+- **Tutorial-Texte:** `TIPS` oben in `src/main.js`.
+- **Theme:** CSS-Variablen oben in `css/style.css`.
 
 ## Tests
 
 ```bash
-npm test                # Logik- und Statistik-Tests mit node:test (Node ≥ 20, keine Abhängigkeiten)
+npm test          # node:test, Node ≥ 20, keine Abhängigkeiten (~1 s)
+FULL=1 npm test   # zusätzlich: vollständiger Beweis „Level 3 braucht ≥ 6 Züge“ (~1 min)
 ```
 
-Geprüft werden u. a.: gleiches Datum → gleiches Startbrett, Endlos zufällig, wortfreie
-Startbretter, `slideLine` in alle 4 Richtungen, waagerechte/senkrechte/überlappende Treffer,
-HAUS ohne AUS, Gravitation + Nachfüllen ohne Lücken, Punkteformel inkl. Kaskaden
-(unabhängig nachgerechnet über 12 000 Züge), Undo stellt Grid, Score, Züge, Combo und
-PRNG-Zustand exakt wieder her, Reset, Teilen-Text, Rundenende.
+Geprüft u. a.: Schieben um Steine, Stein-Linien gesperrt, kurze Wörter → richtiger Modifikator je
+Lage, Vorrang, Klemmen/Belegt-Regel, Trieb-Ring + seltene Buchstaben, Schwerkraft mit Steinen,
+Brunnen bleibt / Trieb fällt mit, exakter Zielwort-Treffer (nicht in längerem Wort), Zielwort in der
+Kaskade, Punkteformel inkl. Brunnen/Kaskade/Hinweise, Vorschau = tatsächliches Ergebnis ohne
+Zustandsänderung, Hinweise, Undo/Reset stellen Modifikatoren exakt wieder her, Determinismus,
+Tagesrätsel, Teilen-Text; alle 12 Level gültig, Progression, jede Referenzlösung löst ihr Level,
+Mindestzugzahlen per Löser, Fortschritt in `localStorage`.
 
-Optionaler Browser-Smoke-Test (lokales Chrome nötig, läuft **nicht** in CI):
+Optionaler Browser-Test (lokales Chrome, nicht in CI):
 
 ```bash
 npm i --no-save puppeteer-core
-CHROME_PATH=/usr/bin/google-chrome npm run test:browser
-# Screenshots: SCREENSHOTS=./screenshots npm run test:browser
+CHROME_PATH=/usr/bin/google-chrome SCREENSHOTS=./screenshots npm run test:browser
 ```
 
-Er prüft u. a. Startseite (Tagesrätsel-Knopf, „So geht's“, Ergebnis/Rekord aus localStorage,
-„Ergebnis teilen“), Start/Menü-Wechsel, dass Körner beim Treffer entstehen und die Canvas danach
-wieder leer ist (auch nach Undo), den Reduced-Motion-Fallback, und öffnet `index.html` per `file://` (keine JS-Fehler, Spielablauf über Pfeile, Tastatur,
-Undo, Moduswechsel samt In-Game-Dialog, Rundenende-Dialog, Teilen-Dialog, Reset; native Dialoge gelten als Fehler), prüft das Manifest über einen lokalen
-http-Server und emuliert ein **iPhone 14 mit Touch**: Viewport-Meta, kein Querscrollen,
-Touch-Ziele ≥ 44 px, Wischen waagerecht/senkrecht (je genau ein Zug), Tippen = Auswahl,
-Pfeil per Touch, Audio-Unlock.
+Desktop + iPhone 14 (Touch): Startseite, Level 1 per Pfeil und per Wischen lösen, Abschluss-Dialog,
+„Nächstes Level“, Fortschritt, Hinweis, „Was passiert?“, Vorschau-Aufblitzen, Undo entfernt
+Modifikator, Brett mit allen drei Modifikatoren, Theme-Variablen unverändert, alles passt in den
+Bildschirm, Touch-Ziele ≥ 44 px, keine JS-Fehler.
 
-CI: `.github/workflows/test.yml` führt bei Push und Pull Request `npm test` mit Node 20 aus.
+CI: `.github/workflows/test.yml` führt bei Push/PR die Syntaxprüfung und `npm test` (Node 20) aus.

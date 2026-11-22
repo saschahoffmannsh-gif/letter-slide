@@ -1,8 +1,9 @@
 /*
- * Letter Slide – KONFIGURATION
- * ============================
+ * Wortgarten – KONFIGURATION
+ * ===========================
  * Alles, was man typischerweise austauschen oder feinjustieren will, steht hier:
- * Wortliste, Buchstaben-Gewichtung, Punkteformel, Limits und die Modus-Registry.
+ * Wortliste, Buchstaben-Gewichtung, Modifikator-Regeln, Punkteformel, Limits, Modi.
+ * (Die Level selbst stehen in src/levels.js.)
  *
  * Läuft im Browser (klassisches <script>, legt `LetterSlideConfig` global ab)
  * und in Node (`require("./config.js")`). Keine Abhängigkeiten.
@@ -110,55 +111,93 @@
   const USE_UNIFORM_LETTERS = false;
 
   /*
-   * PUNKTEFORMEL  >>> HIER ANPASSEN <<<
-   * Basispunkte pro Wortlänge (Länge >= 6 nutzt den Wert für 6) und der
-   * Kaskaden-Multiplikator 1 + COMBO_STEP * (Stufe - 1)  ->  x1, x1.5, x2, x2.5 ...
-   * Punkte einer Kaskadenstufe = round(Summe der Basispunkte aller Wörter * Multiplikator)
-   * (berechnet in cascade() in logic.js).
+   * ======================================================================
+   * WORTGARTEN – REGELN  >>> HIER ANPASSEN <<<
+   * ======================================================================
    */
-  const SCORE_BY_LENGTH = { 3: 10, 4: 25, 5: 60, 6: 150 };
+
+  /** Kurze Wörter (Werkzeuge): Länge SHORT_MIN..SHORT_MAX. Sie geben 0 Punkte, pflanzen Modifikatoren. */
+  const SHORT_MIN = 3;
+  const SHORT_MAX = 5;
+
+  /*
+   * PUNKTEFORMEL fürs Zielwort  >>> HIER ANPASSEN <<<
+   *   Punkte = Länge × POINTS_PER_LETTER × BRUNNEN_FACTOR^(Brunnen im Pfad)
+   *            × Kaskaden-Multiplikator × (1 − HINT_PENALTY × benutzte Hinweise)
+   *   Kaskaden-Multiplikator = 1 + COMBO_STEP × (Anzahl Löschrunden, bevor das Zielwort entstand)
+   *            -> direkt durch den Slide ×1, nach 1 Kaskade ×1,5, nach 2 ×2 …
+   *   (berechnet in targetScore() in logic.js)
+   */
+  const POINTS_PER_LETTER = 10;
+  const BRUNNEN_FACTOR = 2;
   const COMBO_STEP = 0.5;
+  const HINTS_PER_LEVEL = 3;
+  const HINT_PENALTY = 0.2;
+
+  /*
+   * MODIFIKATOR-REGELN  >>> HIER ANPASSEN <<<
+   * Für jedes kurze Wort wird der ERSTE passende Eintrag genommen (Reihenfolge = Vorrang),
+   * aber nur, wenn der Modifikator im Level aktiv ist (level.modifiersEnabled).
+   * Ist der Typ im Level aus, entsteht nichts (es wird NICHT auf die nächste Regel ausgewichen –
+   * so ist für den Spieler eindeutig, was ein Wort an dieser Stelle bewirkt).
+   *   when(word, g)  word = { axis: "row"|"col", line, start, length, cells }, g = Geometrie-Helfer
+   *   type           "trieb" | "stein" | "brunnen"
+   * Zielfeld: stein/brunnen = Feld rechts vom letzten Buchstaben (waagerecht) bzw. darunter
+   * (senkrecht); trieb = erstes freies Feld im Uhrzeigersinn um das Wort (siehe logic.js).
+   */
+  const MODIFIER_RULES = [
+    // Mitte: Wort berührt eines der 4 zentralen Felder (|r-2,5| < 1 und |c-2,5| < 1)
+    { type: "trieb",   when: (w, g) => w.cells.some((i) => g.isCenter(i)) },
+    // waagerecht in der unteren Hälfte (Zeile 4–6) oder senkrecht in der linken Hälfte (Spalte 1–3)
+    { type: "stein",   when: (w) => (w.axis === "row" && w.line >= 3) || (w.axis === "col" && w.line <= 2) },
+    // senkrecht in der rechten Hälfte (Spalte 4–6) oder waagerecht in der oberen Hälfte (Zeile 1–3)
+    { type: "brunnen", when: (w) => (w.axis === "col" && w.line >= 3) || (w.axis === "row" && w.line <= 2) }
+  ];
+  /** Seltene Buchstaben für Triebe (Auswahl per geseedetem PRNG). */
+  const RARE_LETTERS = ["Q", "X", "Y", "J"];
+  /** Dauer des gelben Aufblitzens der Vorschau (ms). */
+  const PREVIEW_MS = 800;
 
   /** Undo-Tiefe (Spec: mindestens 20). */
   const HISTORY_LIMIT = 50;
   /** Sicherheitsgrenze gegen theoretisch endlose Kaskaden. */
   const MAX_CASCADE_LEVELS = 100;
-  /** Max. Versuche, ein wortfreies Startbrett zu würfeln. */
+  /** Max. Versuche, ein wortfreies Startbrett zu würfeln (Freies Spiel). */
   const MAX_BOARD_ATTEMPTS = 5000;
   /** Tag 1 der Tagesrätsel-Nummerierung (lokales Datum). */
   const DAILY_EPOCH = "2026-01-01";
 
   /*
-   * MODI – Registry. Neuer Modus = neuer Eintrag. Der Button oben erscheint automatisch.
-   *   label            Text des Modus-Buttons
-   *   seed(ctx, h)     liefert den uint32-Seed. ctx = { dateKey, date, seed }, h = Hilfsfunktionen
-   *                    aus logic.js ({ hashString, randomSeed })
-   *   shareTag(state)  Kennung im Teilen-Text (z. B. "#326" oder "Endlos")
-   *   title(state)     Anzeige im HUD
+   * MODI
+   *   level  – Level 1..n aus src/levels.js (Fortschritt in localStorage)
+   *   daily  – Tagesrätsel: ein Level aus der Liste, per Datum gewählt (für alle gleich)
+   *   free   – Freies Spiel: Zufallsbrett, alle Modifikatoren, kein Zielwort (zum Ausprobieren)
+   *   title(state)    Anzeige unter dem Titel
+   *   shareTag(state) Kennung im Teilen-Text
    */
   const MODES = {
-    daily: {
-      id: "daily",
-      label: "Tagesrätsel",
-      /** Seed aus dem lokalen Datum "YYYY-MM-DD" -> weltweit gleiches Brett pro Kalendertag. */
-      seed: (ctx, h) => h.hashString(ctx.dateKey),
-      shareTag: (state) => `#${state.puzzleNumber}`,
-      title: (state) => `Tagesrätsel #${state.puzzleNumber}`
+    level: {
+      id: "level", label: "Level",
+      title: (s) => `Level ${s.level.id} von ${s.levelCount}`,
+      shareTag: (s) => `Level ${s.level.id}`
     },
-    endless: {
-      id: "endless",
-      label: "Endlos",
-      /** Zufälliger Seed bei jedem Start (oder übergebener Seed, z. B. für Tests). */
-      seed: (ctx, h) => (ctx.seed != null ? ctx.seed >>> 0 : h.randomSeed()),
-      shareTag: () => "Endlos",
-      title: () => "Endlos"
+    daily: {
+      id: "daily", label: "Tagesrätsel",
+      title: (s) => `Tagesrätsel #${s.puzzleNumber}`,
+      shareTag: (s) => `Tagesrätsel #${s.puzzleNumber} · Level ${s.level.id}`
+    },
+    free: {
+      id: "free", label: "Freies Spiel",
+      title: () => "Freies Spiel",
+      shareTag: () => "Freies Spiel"
     }
   };
 
   const config = {
     GRID_SIZE, MIN_WORD_LENGTH, WORD_LIST_RAW, LETTER_WEIGHTS, USE_UNIFORM_LETTERS,
-    SCORE_BY_LENGTH, COMBO_STEP, HISTORY_LIMIT, MAX_CASCADE_LEVELS, MAX_BOARD_ATTEMPTS,
-    DAILY_EPOCH, MODES
+    SHORT_MIN, SHORT_MAX, POINTS_PER_LETTER, BRUNNEN_FACTOR, COMBO_STEP, HINTS_PER_LEVEL, HINT_PENALTY,
+    MODIFIER_RULES, RARE_LETTERS, PREVIEW_MS,
+    HISTORY_LIMIT, MAX_CASCADE_LEVELS, MAX_BOARD_ATTEMPTS, DAILY_EPOCH, MODES
   };
 
   if (typeof module !== "undefined" && module.exports) module.exports = config;

@@ -1,7 +1,12 @@
 /*
- * Letter Slide – STATISTIK (localStorage)
- * =======================================
- * Reine Funktionen ohne DOM: Ergebnis des Tagesrätsels pro Datum und Endlos-Rekord.
+ * Wortgarten – SPIELSTAND & STATISTIK (localStorage)
+ * ==================================================
+ * Reine Funktionen ohne DOM:
+ *   progress  – Level-Fortschritt: höchstes freigeschaltetes Level + beste Punkte je Level
+ *               (Gesamtpunktzahl = Summe der besten Level-Punkte)
+ *   daily     – Ergebnis des Tagesrätsels pro Datum
+ *   tips      – bereits gezeigte Tutorial-Hinweise
+ *   prefs     – Einstellungen (Vorschau an/aus)
  * `storage` ist ein localStorage-ähnliches Objekt ({ getItem, setItem }) oder null
  * (z. B. privates Surfen / Node) – dann wird nur im Speicher gearbeitet.
  *
@@ -10,12 +15,12 @@
 (function (root) {
   "use strict";
 
-  const STORAGE_KEY = "letterSlideStats.v1";
+  const STORAGE_KEY = "wortgartenStats.v1";
   /** So viele Tagesergebnisse bleiben gespeichert (ältere werden entfernt). */
   const KEEP_DAYS = 60;
 
   function emptyStats() {
-    return { daily: {}, endlessBest: 0 };
+    return { daily: {}, endlessBest: 0, progress: { unlocked: 1, best: {} }, tips: {}, prefs: { preview: true } };
   }
 
   /** Stats laden; kaputte/fehlende Daten ergeben leere Stats statt eines Fehlers. */
@@ -31,6 +36,13 @@
         }
       }
       if (data && Number.isFinite(data.endlessBest)) stats.endlessBest = Math.max(0, data.endlessBest);
+      const p = data && data.progress;
+      if (p && Number.isInteger(p.unlocked) && p.unlocked >= 1) stats.progress.unlocked = p.unlocked;
+      if (p && p.best && typeof p.best === "object") {
+        for (const [id, pts] of Object.entries(p.best)) if (/^\d+$/.test(id) && Number.isFinite(pts) && pts >= 0) stats.progress.best[id] = pts;
+      }
+      if (data && data.tips && typeof data.tips === "object") for (const k of Object.keys(data.tips)) stats.tips[k] = true;
+      if (data && data.prefs && typeof data.prefs.preview === "boolean") stats.prefs.preview = data.prefs.preview;
       return stats;
     } catch (_) {
       return emptyStats();
@@ -80,12 +92,35 @@
     return { stats, isNewBest };
   }
 
+  /**
+   * Gelöstes Level eintragen: beste Punkte behalten, nächstes Level freischalten.
+   * @returns { stats, isNewBest }
+   */
+  function recordLevel(stats, id, points) {
+    const prev = stats.progress.best[id];
+    const isNewBest = prev === undefined || points > prev;
+    if (isNewBest) stats.progress.best[id] = points;
+    stats.progress.unlocked = Math.max(stats.progress.unlocked, id + 1);
+    return { stats, isNewBest };
+  }
+
+  /** Gesamtpunkte = Summe der besten Level-Punkte (optional ohne ein Level). */
+  function totalScore(stats, excludeId = null) {
+    return Object.entries(stats.progress.best).reduce((sum, [id, pts]) => (Number(id) === excludeId ? sum : sum + pts), 0);
+  }
+
+  /** Anzahl gelöster Level. */
+  function solvedCount(stats) { return Object.keys(stats.progress.best).length; }
+
   /** Ergebnis für ein Datum oder null. */
   function dailyResult(stats, dateKey) {
     return stats.daily[dateKey] || null;
   }
 
-  const api = { STORAGE_KEY, KEEP_DAYS, emptyStats, loadStats, saveStats, pruneDaily, recordDaily, recordEndless, dailyResult };
+  const api = {
+    STORAGE_KEY, KEEP_DAYS, emptyStats, loadStats, saveStats, pruneDaily, recordDaily, recordEndless, dailyResult,
+    recordLevel, totalScore, solvedCount
+  };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.LetterSlideStats = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);
