@@ -11,7 +11,12 @@
   const { GRID_SIZE, MODES, idx, comboMultiplier } = L;
 
   /** Animationsdauern (ms). */
-  const ANIM = { slide: 120, flash: 260, vanish: 180, fall: 150, wordHold: 650, comboHold: 700 };
+  /*   flash   = kurzes goldenes Aufleuchten vor dem Zerbröseln
+   *   crumble = Wartezeit bis die Kacheln sichtbar zerfallen sind -> dann Gravitation
+   *   vanish  = einfaches Ausblenden (Fallback bei prefers-reduced-motion) */
+  const ANIM = { slide: 120, flash: 150, crumble: 300, vanish: 180, fall: 150, wordHold: 700, comboHold: 750 };
+  const Particles = root.LetterSlideParticles;
+  const Sound = root.LetterSlideAudio;
 
   const wait = (ms) => new Promise((res) => setTimeout(res, ms));
   /** Zwei Frames abwarten, damit der Startzustand einer Transition gerendert ist. */
@@ -59,7 +64,7 @@
           box.appendChild(b);
         }
       }
-      for (const mode of Object.values(MODES)) {
+      for (const mode of this.el.modeButtons ? Object.values(MODES) : []) {
         const b = document.createElement("button");
         b.type = "button";
         b.textContent = mode.label;
@@ -80,6 +85,7 @@
       t.style.left = `${(c * 100) / GRID_SIZE}%`;
       t.style.top = `${(r * 100) / GRID_SIZE}%`;
       t.dataset.r = r;
+      t.style.setProperty("--i", r * GRID_SIZE + Math.max(0, c)); // für die Intro-Staffelung
       t.dataset.c = c;
       const f = document.createElement("div");
       f.className = "face";
@@ -140,15 +146,39 @@
       await wait(ANIM.slide + 10);
     },
 
-    /** Treffer: Kacheln gelb aufblitzen, Wort groß einblenden, dann ausblenden. */
+    /**
+     * Treffer: Kacheln kurz golden aufleuchten, Wort groß einblenden, dann zerbröseln
+     * die Kacheln in Körner (particles.js). Die Gravitation startet, sobald sie sichtbar
+     * zerfallen sind; die Körner fallen währenddessen weiter.
+     */
     async animateClear(step) {
       const tiles = this.renderBoard(step.gridBefore);
       for (const i of step.cleared) tiles.get(i).classList.add("hit");
       this.showWordFlash(step);
       if (step.level >= 2) this.showComboPop(step.level);
       await wait(ANIM.flash);
-      for (const i of step.cleared) tiles.get(i).classList.add("vanish");
-      await wait(ANIM.vanish);
+      if (Particles && Particles.enabled()) {
+        // Reihenfolge: Buchstaben in Wortreihenfolge (jedes Wort startet parallel)
+        const order = new Map();
+        for (const m of step.matches) m.cells.forEach((cell, k) => { if (!order.has(cell)) order.set(cell, k); });
+        const items = [...order].map(([cell, k]) => ({ el: tiles.get(cell), order: k }));
+        const released = Particles.crumble(items);
+        for (const { el } of items) el.classList.add("crumbled"); // DOM-Kachel weg, Körner übernehmen
+        if (Sound && Sound.crumble) Sound.crumble(items.length);
+        await wait(Math.max(ANIM.crumble, Math.min(420, released * 1000 * 0.85)));
+      } else {
+        for (const i of step.cleared) tiles.get(i).classList.add("vanish");
+        await wait(ANIM.vanish);
+      }
+    },
+
+    /** Kurzes Einblenden der Kacheln beim Rundenstart. */
+    introBoard() {
+      const board = this.el.board;
+      board.classList.remove("intro");
+      void board.offsetWidth;
+      board.classList.add("intro");
+      setTimeout(() => board.classList.remove("intro"), 900);
     },
 
     /** Gravitation: Kacheln fallen von ihrer alten Zeile nach unten, neue fallen von oben ein. */
@@ -209,7 +239,7 @@
         c.classList.add("bump");
         setTimeout(() => c.classList.remove("bump"), 160);
       }
-      for (const b of this.el.modeButtons.children) b.classList.toggle("active", b.dataset.mode === state.modeId);
+      if (this.el.modeButtons) for (const b of this.el.modeButtons.children) b.classList.toggle("active", b.dataset.mode === state.modeId);
       this.el.overlay.classList.toggle("show", state.ended);
       if (state.ended) {
         this.el.endedSummary.textContent = `${state.score} Punkte in ${state.moves} ${state.moves === 1 ? "Zug" : "Zügen"}`;

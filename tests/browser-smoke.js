@@ -9,6 +9,7 @@ const fs = require("fs");
 const http = require("http");
 const puppeteer = require(process.env.PUPPETEER_CORE || "puppeteer-core");
 const ROOT = path.resolve(__dirname, "..");
+const LetterSlideParticlesMax = 2500;
 const CHROME = process.env.CHROME_PATH || "/usr/bin/google-chrome";
 const SHOTS = process.env.SCREENSHOTS ? path.resolve(process.env.SCREENSHOTS) : null;
 
@@ -50,10 +51,50 @@ const predict = (page, axis, i, dir) => page.evaluate((a, i, d) => {
   return clone.grid.join("");
 }, axis, i, dir);
 
+/** Wartet, bis die Partikel-Ebene leer ist, und prüft, dass die Canvas wirklich leer gezeichnet ist. */
+const particlesCleared = (page) => page.waitForFunction(() => {
+  const P = LetterSlideParticles;
+  if (P.alive !== 0 || P.running) return false;
+  const c = document.getElementById("particles");
+  const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
+  for (let i = 3; i < d.length; i += 16) if (d[i] !== 0) return false;
+  return true;
+}, { timeout: 5000 }).then(() => true, () => false);
+const screenIs = (page, name) => page.evaluate((n) => LetterSlideApp.screen === n && !document.getElementById(n).hidden, name);
+const waitScreen = (page, name) => page.waitForFunction((n) => LetterSlideApp.screen === n && !document.getElementById(n).classList.contains("off") && !document.getElementById(n).hidden, { timeout: 5000 }, name);
+
+/** Spielt Randpfeile, bis ein Zug punktet (über die echte UI). */
+async function playUntilScore(page, clickFn) {
+  for (let k = 0; k < 80; k++) {
+    const mv = await findScoringMove(page);
+    if (mv) {
+      const before = await page.evaluate(() => LetterSlideParticles.spawnedTotal);
+      await page.evaluate((m) => { LetterSlideApp.handleSlide(m.axis, m.i, m.d); }, mv);
+      return before;
+    }
+    await clickFn(["#arrows-top", "#arrows-bottom", "#arrows-left", "#arrows-right"][k % 4] + ` button:nth-child(${(k % 6) + 1})`);
+    await idle(page);
+  }
+  return null;
+}
+
 async function desktopFile(browser) {
   console.log("Desktop, file://");
   const { page, errors } = await openPage(browser, "file://" + path.join(ROOT, "index.html"),
     (p) => p.setViewport({ width: 1000, height: 900 }));
+  // Startseite
+  ok(await screenIs(page, "start") && await page.$eval("#game", (g) => g.hidden), "Startseite beim Laden sichtbar, Spiel verborgen");
+  const n = await page.evaluate(() => LetterSlideLogic.dailyPuzzleNumber(LetterSlideLogic.formatDateKey(new Date())));
+  ok((await page.$eval("#start-daily-title", (e) => e.textContent)) === `Tagesrätsel #${n}`, `Startknopf „Tagesrätsel #${n}“`);
+  ok(/\d{2}\.\d{2}\.\d{4}/.test(await page.$eval("#start-daily-sub", (e) => e.textContent)), "Datum am Tagesrätsel-Knopf");
+  ok(await page.$eval("#start-share", (e) => e.hidden && e.getClientRects().length === 0), "„Ergebnis teilen“ noch verborgen");
+  await page.click("#start-howto"); await waitModal(page);
+  ok(await modalTitle(page) === "So geht's" && await page.$$eval(".score-table tr", (r) => r.length) === 4, "„So geht's“-Dialog mit Punktetabelle");
+  await page.keyboard.press("Escape");
+  await page.click("#start-daily");
+  await waitScreen(page, "game");
+  ok(await screenIs(page, "game") && await page.$eval("#start", (e) => e.hidden), "Tagesrätsel gestartet -> Spielbildschirm");
+
   ok(await page.$$eval("#board .tile", (t) => t.length) === 36, "36 Kacheln sichtbar");
   ok(await page.$$eval("button.arrow", (t) => t.length === 24 && t.every((b) => b.querySelector("svg use"))), "24 Randpfeile mit SVG-Icon");
   ok(await page.$$eval("#board .tile", (t) => new Set(t.map((x) => [...x.classList].find((c) => /^c\d$/.test(c)))).size) >= 3, "Kacheln in mehreren Pastellfarben");
@@ -80,43 +121,75 @@ async function desktopFile(browser) {
   await page.keyboard.down("Control"); await page.keyboard.press("z"); await page.keyboard.up("Control");
   ok((await state(page)).moves === 0, "Strg+Z");
 
-  let scored = false;
-  for (let k = 0; k < 80 && !scored; k++) {
-    const sel = ["#arrows-top", "#arrows-bottom", "#arrows-left", "#arrows-right"][k % 4] + ` button:nth-child(${(k % 6) + 1})`;
-    await page.click(sel); await idle(page);
-    scored = (await state(page)).score > 0;
-  }
-  ok(scored, "Treffer erzielt (Score " + (await state(page)).score + ")");
+  // Treffer -> Partikel
+  const before = await playUntilScore(page, (sel) => page.click(sel));
+  ok(before !== null, "Treffer-Zug gefunden");
+  await page.waitForFunction(() => LetterSlideParticles.alive > 0, { timeout: 3000 }).catch(() => {});
+  const spawned = await page.evaluate((b) => ({ alive: LetterSlideParticles.alive, spawned: LetterSlideParticles.spawnedTotal - b }), before);
+  ok(spawned.alive > 0 && spawned.spawned >= 100, `Partikel gespawnt (${spawned.spawned} Körner, ${spawned.alive} aktiv)`);
+  ok(spawned.alive <= LetterSlideParticlesMax, "Partikel-Limit eingehalten");
+  await idle(page);
+  ok((await state(page)).score > 0, "Treffer erzielt (Score " + (await state(page)).score + ")");
+  ok(await particlesCleared(page), "Partikel verschwinden, Canvas danach leer, rAF gestoppt");
 
-  await page.click('#mode-buttons button[data-mode="endless"]');
+  // Undo direkt nach einem Treffer entfernt alle Körner sofort
+  const b2 = await playUntilScore(page, (sel) => page.click(sel));
+  if (b2 !== null) {
+    await idle(page);
+    const aliveBefore = await page.evaluate(() => LetterSlideParticles.alive);
+    await page.click("#btn-undo");
+    const after = await page.evaluate(() => ({ alive: LetterSlideParticles.alive, running: LetterSlideParticles.running }));
+    ok(after.alive === 0 && !after.running, `Undo entfernt restliche Körner (${aliveBefore} -> 0)`);
+  }
+
+  // Menü mit laufender Runde -> Bestätigung
+  await page.click("#btn-menu");
   await waitModal(page);
-  ok(await modalTitle(page) === "Aktuelle Runde verwerfen?", "Moduswechsel fragt im In-Game-Dialog");
+  ok(await modalTitle(page) === "Aktuelle Runde verwerfen?", "Menü fragt im In-Game-Dialog");
   await shot(page, "desktop-modal-confirm.png");
   await page.click('#modal-actions button[data-value="cancel"]');
-  ok(!(await modalVisible(page)) && (await state(page)).moves > 0, "Abbrechen behält die Runde");
-  await page.click('#mode-buttons button[data-mode="endless"]');
-  await waitModal(page);
-  await page.click('#modal-actions button[data-value="ok"]');
-  ok(await page.$eval("#stat-mode", (e) => e.textContent) === "Endlos", "Endlos-Modus");
-  ok((await state(page)).grid !== start, "Endlos-Brett anders");
-  await page.click("#arrows-left button:nth-child(1)"); await idle(page);
+  ok(!(await modalVisible(page)) && await screenIs(page, "game"), "Abbrechen bleibt im Spiel");
+
+  // Tagesrätsel beenden -> Ergebnis gespeichert
   await page.click("#btn-end");
   await waitModal(page);
   ok(await modalTitle(page) === "Runde beendet", "Rundenende-Dialog");
   ok(await page.$eval("#ended-overlay", (e) => e.classList.contains("show")), "Runde beendet -> Overlay");
   ok(await page.$eval("button.arrow", (b) => b.disabled), "Pfeile gesperrt");
+  const dailyScore = (await state(page)).score;
   await shot(page, "desktop-modal-ende.png");
   await page.click('#modal-actions button[data-value="share"]');
   await page.waitForFunction(() => document.getElementById("modal-title").textContent === "Teilen");
   await new Promise((r) => setTimeout(r, 300));
   const share = await page.$eval("#modal-body textarea", (e) => e.value);
-  ok(/^Letter Slide Endlos · 1 Zug · \d+ Punkte/.test(share), "Teilen-Text: " + share);
+  ok(new RegExp(`^Letter Slide #${n} · \\d+ Z(ug|üge) · ${dailyScore} Punkte`).test(share), "Teilen-Text: " + share);
   ok(/kopiert/.test(await page.$eval("#modal-body .status", (e) => e.textContent)), "Teilen kopiert in die Zwischenablage");
   await page.keyboard.press("Escape");
   ok(!(await modalVisible(page)), "Escape schließt den Dialog");
-  await page.click("#btn-share"); await waitModal(page);
+  await page.click("#btn-menu");
+  await waitScreen(page, "start");
+  ok(await screenIs(page, "start"), "Menü-Knopf -> Startseite (Runde beendet, keine Rückfrage)");
+  ok((await page.$eval("#start-daily-sub", (e) => e.textContent)).includes(`${dailyScore} Punkte`), "Startseite zeigt heutiges Ergebnis");
+  ok(await page.$eval("#start-share", (e) => !e.hidden && e.getClientRects().length > 0), "„Ergebnis teilen“ sichtbar");
+  ok(await page.evaluate(() => JSON.parse(localStorage.getItem(LetterSlideStats.STORAGE_KEY)).daily[LetterSlideLogic.formatDateKey(new Date())].score) === dailyScore, "Ergebnis in localStorage");
+  await page.click("#start-share"); await waitModal(page);
+  ok((await page.$eval("#modal-body textarea", (e) => e.value)).includes(`#${n}`), "Ergebnis von der Startseite teilen");
   await page.click('#modal-actions button[data-value="ok"]');
-  ok(!(await modalVisible(page)), "Teilen-Button öffnet/schließt Dialog");
+
+  // Endlos: Rekord merken
+  await page.click("#start-endless");
+  await waitScreen(page, "game");
+  ok(await page.$eval("#stat-mode", (e) => e.textContent) === "Endlos", "Endlos-Modus");
+  ok((await state(page)).grid !== start, "Endlos-Brett anders");
+  await playUntilScore(page, (sel) => page.click(sel)); await idle(page);
+  const endlessScore = (await state(page)).score;
+  await page.click("#btn-menu"); await waitModal(page);
+  await page.click('#modal-actions button[data-value="ok"]');
+  await waitScreen(page, "start");
+  ok((await page.$eval("#start-endless-sub", (e) => e.textContent)) === `Rekord: ${endlessScore} Punkte`, `Endlos-Rekord auf der Startseite (${endlessScore})`);
+  ok(await particlesCleared(page), "Keine Körner auf der Startseite");
+  await shot(page, "desktop-start.png");
+  await page.click("#start-daily"); await waitScreen(page, "game");
   await page.click("#btn-reset");
   ok((await state(page)).moves === 0 && !(await page.evaluate(() => LetterSlideApp.game.ended)), "Reset");
   await shot(page, "desktop.png");
@@ -149,10 +222,26 @@ async function httpManifest(browser) {
   server.close();
 }
 
+async function reducedMotion(browser) {
+  console.log("prefers-reduced-motion: reduce");
+  const { page, errors } = await openPage(browser, "file://" + path.join(ROOT, "index.html"),
+    (p) => p.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "reduce" }]));
+  await page.click("#start-endless");
+  await waitScreen(page, "game");
+  const b = await playUntilScore(page, (sel) => page.click(sel));
+  await page.waitForSelector("#board .tile.vanish", { timeout: 3000 }).then(() => ok(true, "einfaches Ausblenden statt Partikel"), () => ok(false, "einfaches Ausblenden statt Partikel"));
+  await idle(page);
+  ok(b !== null && await page.evaluate(() => LetterSlideParticles.spawnedTotal) === 0 && (await state(page)).score > 0, "keine Körner, Punkte trotzdem gezählt");
+  ok(errors.length === 0, "keine JS-Fehler" + (errors.length ? ": " + errors.join(" | ") : ""));
+  await page.close();
+}
+
 async function iphone(browser) {
   const device = puppeteer.KnownDevices["iPhone 14"] || puppeteer.KnownDevices["iPhone 13"];
   console.log(`Mobil: ${device.name || "iPhone"} (${device.viewport.width}x${device.viewport.height}, Touch)`);
   const { page, errors } = await openPage(browser, "file://" + path.join(ROOT, "index.html"), (p) => p.emulate(device));
+  await page.evaluate(() => localStorage.clear()); // frischer Start (Desktop-Lauf teilt sich den Speicher)
+  await page.reload({ waitUntil: "load" });
   const vp = await page.$eval('meta[name="viewport"]', (m) => m.content);
   ok(/width=device-width/.test(vp) && /initial-scale=1/.test(vp) && /viewport-fit=cover/.test(vp), "viewport-Meta: " + vp);
   ok(await page.$('meta[name="apple-mobile-web-app-capable"][content="yes"]') !== null, "apple-mobile-web-app-capable");
@@ -161,7 +250,25 @@ async function iphone(browser) {
   ok(await page.$eval("#board", (b) => getComputedStyle(b).touchAction === "none"), "touch-action: none auf dem Brett");
   const css = await page.evaluate(() => ({ ta: getComputedStyle(document.documentElement).touchAction, us: getComputedStyle(document.body).userSelect || getComputedStyle(document.body).webkitUserSelect, ob: getComputedStyle(document.documentElement).overscrollBehaviorY }));
   ok(css.ta === "manipulation" && css.us === "none" && css.ob === "none", "kein Doppeltipp-Zoom/Textauswahl/Overscroll " + JSON.stringify(css));
-  const small = await page.$$eval("button", (bs) => bs.map((b) => { const r = b.getBoundingClientRect(); return { t: b.getAttribute("aria-label") || b.textContent, w: r.width, h: r.height }; }).filter((x) => x.w < 44 || x.h < 44));
+  // Startseite auf dem iPhone
+  ok(await screenIs(page, "start"), "Startseite sichtbar");
+  ok(await page.$eval("#start-share", (e) => e.getClientRects().length === 0), "ohne Ergebnis kein „Ergebnis teilen“");
+  const fitStart = await page.$$eval("#start button:not([hidden])", (bs) => bs.map((b) => { const r = b.getBoundingClientRect(); return { b: r.bottom, w: r.width, h: r.height }; }));
+  ok(fitStart.every((x) => x.b <= device.viewport.height && x.w >= 44 && x.h >= 44), "Startseite: alle Knöpfe >= 44 px und ohne Scrollen sichtbar");
+  ok(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight + 1), "Startseite passt ohne Scrollen");
+  await shot(page, "iphone-start.png");
+  await page.tap("#start-howto"); await waitModal(page);
+  await new Promise((r) => setTimeout(r, 300));
+  const hcard = await page.$eval(".modal-card", (c) => { const r = c.getBoundingClientRect(); return { t: r.top, b: r.bottom }; });
+  ok(hcard.t >= 0 && hcard.b <= device.viewport.height, "„So geht's“ passt auf den Bildschirm");
+  await shot(page, "iphone-howto.png");
+  await page.tap('#modal-actions button[data-value="ok"]');
+  await page.tap("#start-daily");
+  await waitScreen(page, "game");
+  ok(await screenIs(page, "game"), "Tagesrätsel per Touch gestartet");
+  await new Promise((r) => setTimeout(r, 500)); // Intro-Animation abwarten
+
+  const small = await page.$$eval("button", (bs) => bs.filter((b) => b.getClientRects().length > 0).map((b) => { const r = b.getBoundingClientRect(); return { t: b.getAttribute("aria-label") || b.textContent, w: r.width, h: r.height }; }).filter((x) => x.w < 44 || x.h < 44));
   ok(small.length === 0, "alle Buttons >= 44x44 px" + (small.length ? ": " + JSON.stringify(small.slice(0, 4)) : ""));
   const tile = await page.$eval("#board .tile", (t) => t.getBoundingClientRect().width);
   const board = await page.$eval("#board", (b) => ({ width: b.getBoundingClientRect().width }));
@@ -204,23 +311,29 @@ async function iphone(browser) {
   ok(await page.evaluate(() => !!LetterSlideAudio.ctx), "AudioContext nach erster Berührung angelegt (iOS-Unlock)");
   await shot(page, "iphone.png");
 
-  // Treffer-Animation festhalten (goldene Kacheln + Wort-Einblendung)
-  let mv = null;
-  for (let k = 0; k < 40 && !mv; k++) {
-    mv = await findScoringMove(page);
-    if (!mv) { await page.tap(`#arrows-right button:nth-child(${(k % 6) + 1})`); await idle(page); }
-  }
-  ok(!!mv, "Treffer-Zug gefunden");
-  if (mv) {
-    page.evaluate((m) => LetterSlideApp.handleSlide(m.axis, m.i, m.d), mv);
+  // Zerbröseln festhalten: mehrere Frames mitten im Zerfall
+  const b0 = await playUntilScore(page, (sel) => page.tap(sel));
+  ok(b0 !== null, "Treffer-Zug gefunden");
+  if (b0 !== null) {
     await page.waitForSelector("#board .tile.hit", { timeout: 3000 });
-    ok(true, "Treffer leuchten (.hit)");
-    if (SHOTS) await page.screenshot({ path: path.join(SHOTS, "iphone-treffer.png") });
+    if (SHOTS) await page.screenshot({ path: path.join(SHOTS, "iphone-crumble-0-glow.png") });
+    await page.waitForFunction(() => LetterSlideParticles.alive > 0, { timeout: 3000 });
+    const t0 = Date.now();
+    const frames = [];
+    for (const [k, at] of [[1, 15], [2, 140], [3, 330]]) {
+      const waitMs = at - (Date.now() - t0);
+      if (waitMs > 0) await new Promise((r) => setTimeout(r, waitMs));
+      const alive = await page.evaluate(() => LetterSlideParticles.alive);
+      frames.push(`${Date.now() - t0}ms:${alive}`);
+      if (SHOTS) await page.screenshot({ path: path.join(SHOTS, `iphone-crumble-${k}.png`), optimizeForSpeed: true });
+    }
+    ok(true, "Zerbröseln-Frames: " + frames.join(", "));
     await idle(page);
+    ok(await particlesCleared(page), "Canvas nach dem Zerbröseln wieder leer");
   }
 
-  // Dialoge auf dem iPhone: Bestätigen + Teilen, Buttons >= 44 px, passt in den Viewport
-  await page.tap('#mode-buttons button[data-mode="endless"]');
+  // Dialoge auf dem iPhone: Menü-Rückfrage + Teilen, Buttons >= 44 px, passt in den Viewport
+  await page.tap("#btn-menu");
   await waitModal(page);
   await new Promise((r) => setTimeout(r, 300)); // Einblend-Animation (scale) abwarten
   const card = await page.$eval(".modal-card", (c) => { const r = c.getBoundingClientRect(); return { l: r.left, r: r.right, t: r.top, b: r.bottom }; });
@@ -232,6 +345,10 @@ async function iphone(browser) {
   await shot(page, "iphone-modal-teilen.png");
   await page.tap('#modal-actions button[data-value="ok"]');
   ok(!(await modalVisible(page)), "Dialog per Touch geschlossen");
+  await page.tap("#btn-menu"); await waitModal(page);
+  await page.tap('#modal-actions button[data-value="ok"]');
+  await waitScreen(page, "start");
+  ok(await screenIs(page, "start"), "Zurück zur Startseite per Touch");
   ok(errors.length === 0, "keine JS-Fehler" + (errors.length ? ": " + errors.join(" | ") : ""));
   await page.close();
 }
@@ -241,6 +358,7 @@ async function iphone(browser) {
   try {
     await desktopFile(browser);
     await httpManifest(browser);
+    await reducedMotion(browser);
     await iphone(browser);
   } finally {
     await browser.close();

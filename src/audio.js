@@ -83,6 +83,36 @@
       this.tone(f * 1.5, 0.18, "sine", 0.06, 0.05);
     },
 
+    /** Zerbröseln: kurzes gefiltertes Rauschen (Körner-Rieseln), lauter bei mehr Kacheln. */
+    crumble(tiles = 3) {
+      const ctx = this.ensure();
+      if (!ctx) return;
+      try {
+        const dur = 0.32;
+        if (!this._noise || this._noise.sampleRate !== ctx.sampleRate) {
+          const len = Math.floor(ctx.sampleRate * dur);
+          this._noise = ctx.createBuffer(1, len, ctx.sampleRate);
+          const d = this._noise.getChannelData(0);
+          for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (Math.random() < 0.35 ? 1 : 0.25); // körnig
+        }
+        const src = ctx.createBufferSource();
+        src.buffer = this._noise;
+        const bp = ctx.createBiquadFilter();
+        bp.type = "bandpass";
+        bp.frequency.setValueAtTime(3200, ctx.currentTime);
+        bp.frequency.exponentialRampToValueAtTime(900, ctx.currentTime + dur);
+        bp.Q.value = 0.9;
+        const gain = ctx.createGain();
+        const vol = Math.min(0.16, 0.05 + tiles * 0.012);
+        gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(vol, ctx.currentTime + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
+        src.connect(bp).connect(gain).connect(ctx.destination);
+        src.start();
+        src.stop(ctx.currentTime + dur + 0.02);
+      } catch (_) { /* Sound ist optional */ }
+    },
+
     setEnabled(on) {
       this.enabled = on;
       try { root.localStorage.setItem(STORAGE_KEY, on ? "0" : "1"); } catch (_) { /* privat/file:// */ }

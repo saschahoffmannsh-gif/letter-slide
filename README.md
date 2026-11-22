@@ -69,6 +69,37 @@ Das Startbrett wird deterministisch so lange neu gewürfelt, bis es keine Wörte
   (Icon als Inline-SVG, keine Bilddatei). Hinweis: iOS nutzt für das Home-Icon kein SVG –
   dort erscheint ein Screenshot, bis ein PNG-`apple-touch-icon` ergänzt wird.
 
+## Startseite
+
+Beim Laden erscheint die Startseite: großes Logo, wippende Deko-Kacheln, Kurz-Slogan,
+großer Knopf **„Tagesrätsel #N“** (mit Datum), **„Endlos“** (mit Rekord), **„So geht's“**
+(Regeln + Punktetabelle, Werte live aus `config.js`) und Ton an/aus. Ist das heutige
+Tagesrätsel schon beendet, zeigt der Knopf das Ergebnis und es gibt **„Ergebnis teilen“**.
+Im Spiel führt **„Menü“** zurück (mit Rückfrage im In-Game-Dialog, falls eine Runde läuft).
+
+Gespeichert wird in `localStorage` (Schlüssel `letterSlideStats.v1`, Modul `src/stats.js`):
+bestes Tagesergebnis pro Datum (die letzten 60 Tage) und der Endlos-Rekord (beim Beenden
+oder Verlassen einer Endlos-Runde). Ohne `localStorage` (Privatmodus) läuft alles weiter,
+nur ohne Speichern.
+
+## Zerbröseln (Partikel)
+
+Bei einem Treffer leuchten die Kacheln kurz golden, dann zerfallen sie in kleine Körner
+(`src/particles.js`): eine Vollbild-`<canvas>` (pointer-events: none, devicePixelRatio-scharf)
+zeichnet pro Kachel bis zu ~196 Körner (1,5–4 px) in der Pastellfarbe mit Hell/Dunkel-Varianten,
+der dunklen Kachelkante, goldenen Funken und dem Buchstaben in Dunkelbraun. Die Körner lösen
+sich von oben nach unten ab, pro Buchstabe in Wortreihenfolge versetzt, und fallen mit
+Schwerkraft und Luftwiderstand, schrumpfen und blenden über 0,6–1,0 s aus. Nach ~300 ms startet
+die Gravitation, die Körner rieseln weiter. Dazu ein leises gefiltertes Rausch-„Rieseln“
+(respektiert Stumm).
+
+- Performance: Typed-Array-Pool, max. 2500 Körner, `fillRect` gebündelt nach Farbe, rAF-Schleife
+  nur solange Körner leben (headless bei 4× CPU-Drosselung: 2040 Körner mit stabilen 60 fps).
+- `prefers-reduced-motion: reduce` → keine Partikel, einfaches Ausblenden.
+- Undo, Reset und Menü entfernen sofort alle Körner.
+- Stellschrauben oben in `src/particles.js` (`MAX_PARTICLES`, `GRAINS_PER_SIDE`, `SWEEP_S`,
+  `STAGGER_S`, `GRAVITY`, `DRAG`, `LIFE_MIN/MAX`, `SPARKLE_RATE`), Timing in `ANIM` (`src/render.js`).
+
 ## Design: „Pastell-Candy“
 
 Cremefarbener Hintergrund, Bonbon-Titel (LETTER koralle, SLIDE lavendel), Kacheln in Mint,
@@ -95,18 +126,21 @@ letter-slide/
 ├── src/
 │   ├── config.js           # Wortliste, Buchstaben-Gewichtung, Punkte, Limits, MODES
 │   ├── logic.js            # reine Spiellogik (kein DOM, in Node ladbar)
-│   ├── audio.js            # optionaler WebAudio-Sound + iOS-Unlock
+│   ├── stats.js            # Tagesergebnis + Endlos-Rekord (localStorage, in Node ladbar)
+│   ├── audio.js            # optionaler WebAudio-Sound (Klick, Wort-Ton, Rieseln) + iOS-Unlock
+│   ├── particles.js        # Canvas-Partikel fürs Zerbröseln
 │   ├── render.js           # DOM-Rendering, HUD, Animationen
 │   ├── input.js            # Buttons, Wischgesten (Pointer Events), Tastatur
-│   └── main.js             # Verdrahtung, Spielablauf, Eingabesperre, Teilen
+│   └── main.js             # Verdrahtung, Startseite <-> Spiel, Eingabesperre, Teilen, Statistik
 ├── tests/
 │   ├── logic.test.js       # Logik-Tests (node:test, keine Abhängigkeiten)
+│   ├── stats.test.js       # Tests der localStorage-Statistik
 │   └── browser-smoke.js    # optionaler Headless-Chrome-Test (Desktop + iPhone 14)
 ├── docs/SPEC.md            # Original-Spezifikation
 └── .github/workflows/test.yml
 ```
 
-Ladereihenfolge im Browser: `config.js → logic.js → audio.js → render.js → input.js → main.js`.
+Ladereihenfolge im Browser: `config.js → logic.js → stats.js → audio.js → particles.js → render.js → input.js → main.js`.
 Jede Datei legt ein Objekt global ab (`LetterSlideConfig`, `LetterSlideLogic`, …);
 `config.js` und `logic.js` exportieren in Node zusätzlich per `module.exports`.
 
@@ -151,7 +185,7 @@ Alles Folgende steht oben in **`src/config.js`**:
 ## Tests
 
 ```bash
-npm test                # Logik-Tests mit node:test (Node ≥ 20, keine Abhängigkeiten)
+npm test                # Logik- und Statistik-Tests mit node:test (Node ≥ 20, keine Abhängigkeiten)
 ```
 
 Geprüft werden u. a.: gleiches Datum → gleiches Startbrett, Endlos zufällig, wortfreie
@@ -168,7 +202,9 @@ CHROME_PATH=/usr/bin/google-chrome npm run test:browser
 # Screenshots: SCREENSHOTS=./screenshots npm run test:browser
 ```
 
-Er öffnet `index.html` per `file://` (keine JS-Fehler, Spielablauf über Pfeile, Tastatur,
+Er prüft u. a. Startseite (Tagesrätsel-Knopf, „So geht's“, Ergebnis/Rekord aus localStorage,
+„Ergebnis teilen“), Start/Menü-Wechsel, dass Körner beim Treffer entstehen und die Canvas danach
+wieder leer ist (auch nach Undo), den Reduced-Motion-Fallback, und öffnet `index.html` per `file://` (keine JS-Fehler, Spielablauf über Pfeile, Tastatur,
 Undo, Moduswechsel samt In-Game-Dialog, Rundenende-Dialog, Teilen-Dialog, Reset; native Dialoge gelten als Fehler), prüft das Manifest über einen lokalen
 http-Server und emuliert ein **iPhone 14 mit Touch**: Viewport-Meta, kein Querscrollen,
 Touch-Ziele ≥ 44 px, Wischen waagerecht/senkrecht (je genau ein Zug), Tippen = Auswahl,
