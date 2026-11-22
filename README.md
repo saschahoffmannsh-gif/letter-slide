@@ -82,34 +82,44 @@ bestes Tagesergebnis pro Datum (die letzten 60 Tage) und der Endlos-Rekord (beim
 oder Verlassen einer Endlos-Runde). Ohne `localStorage` (Privatmodus) läuft alles weiter,
 nur ohne Speichern.
 
-## Zerbröseln (Partikel)
+## Zerbröseln (Auflösen von oben nach unten)
 
-Bei einem Treffer leuchten die Kacheln kurz golden, dann zerfallen sie in kleine Körner
-(`src/particles.js`): eine Vollbild-`<canvas>` (pointer-events: none, devicePixelRatio-scharf)
-zeichnet pro Kachel bis zu ~196 Körner (1,5–4 px) in der Pastellfarbe mit Hell/Dunkel-Varianten,
-der dunklen Kachelkante, goldenen Funken und dem Buchstaben in Dunkelbraun. Die Körner lösen
-sich von oben nach unten ab, pro Buchstabe in Wortreihenfolge versetzt, und fallen mit
-Schwerkraft und Luftwiderstand, schrumpfen und blenden über 0,6–1,0 s aus. Nach ~300 ms startet
-die Gravitation, die Körner rieseln weiter. Dazu ein leises gefiltertes Rausch-„Rieseln“
-(respektiert Stumm).
+Bei einem Treffer leuchten die Kacheln kurz golden, dann lösen sie sich **von oben nach unten**
+auf (`src/particles.js`). Die DOM-Kachel wird ausgeblendet und auf einer Vollbild-`<canvas>`
+(pointer-events: none, devicePixelRatio-scharf) weitergezeichnet. Eine waagerechte Front läuft in
+~460 ms (ease-in-out) von der Oberkante bis zur Unterkante:
+
+- oberhalb der Front lösen sich Körner (weiß, hellgrau, dunkelbraune Buchstaben-Körner, ein paar
+  goldene Funken), fallen mit Schwerkraft, leichtem Seitendrift und Luftwiderstand und blenden aus;
+- unterhalb der Front bleibt die Kachel intakt und scharf (abgeschnitten), an der Front ein
+  ausgefranster Körner-Rand;
+- pro Buchstabe in Wortreihenfolge um 50 ms versetzt; die Gravitation des Bretts startet, wenn
+  die Front der letzten Kachel unten angekommen ist.
+
+Dazu ein granulares **Rieselgeräusch** wie Sand/Zucker (`Sound.trickle` in `src/audio.js`): pro
+Kachel ein leiser, bandpassgefilterter Rausch-Teppich plus viele winzige Rausch-Körner (4–22 ms)
+mit zufälligem Timing, Tonhöhe und Filterfrequenz, Hüllkurve synchron zum Auflösen, überlappend pro
+Buchstabe, hinter einem Hochpass; moderat laut, respektiert Stumm und die iOS-Audio-Freigabe.
 
 - Performance: Typed-Array-Pool, max. 2500 Körner, `fillRect` gebündelt nach Farbe, rAF-Schleife
   nur solange Körner leben (headless bei 4× CPU-Drosselung: 2040 Körner mit stabilen 60 fps).
 - `prefers-reduced-motion: reduce` → keine Partikel, einfaches Ausblenden.
 - Undo, Reset und Menü entfernen sofort alle Körner.
-- Stellschrauben oben in `src/particles.js` (`MAX_PARTICLES`, `GRAINS_PER_SIDE`, `SWEEP_S`,
-  `STAGGER_S`, `GRAVITY`, `DRAG`, `LIFE_MIN/MAX`, `SPARKLE_RATE`), Timing in `ANIM` (`src/render.js`).
+- Stellschrauben oben in `src/particles.js` (`MAX_PARTICLES`, `GRAINS_PER_ROW`, `DISSOLVE_S`,
+  `STAGGER_S`, `EDGE_BAND`, `GRAVITY`, `DRAG`, `LIFE_MIN/MAX`, `SPARKLE_RATE`), Timing in `ANIM`
+  (`src/render.js`). `LetterSlideParticles.timeScale = 0.25` = Zeitlupe (nur für Tests/Screenshots).
 
 ## Design: „Pastell-Candy“
 
-Cremefarbener Hintergrund, Bonbon-Titel (LETTER koralle, SLIDE lavendel), Kacheln in Mint,
-Pfirsich, Lavendel und Butter mit dunkelbraunen Buchstaben, goldenes Aufleuchten bei Treffern,
+Cremefarbener Hintergrund, Bonbon-Titel (LETTER koralle, SLIDE lavendel), **weiße Kacheln** mit
+dunkelbraunen Buchstaben und warmgrauer Unterkante (Tiefe), ausgewählte Zeile/Spalte zart
+lavendel, goldenes Aufleuchten bei Treffern; Pfeile, HUD und Knöpfe bleiben pastell,
 HUD als Pillen (Punkte mit Stern, Züge) plus orangefarbene Combo-Wolke. Alles reines CSS und
 Inline-SVG (Icons als `<symbol>` in `index.html`), keine Bilddateien, keine Webfonts
 (abgerundeter System-Font-Stack: `ui-rounded`, „SF Pro Rounded“, …).
 
 - **Theme ändern:** alle Farben, Schrift und Maße stehen als CSS-Variablen oben in
-  `css/style.css` (`--bg`, `--ink`, `--tile-0` … `--tile-3`, `--hit`, `--mint`, `--combo-bg` …).
+  `css/style.css` (`--bg`, `--ink`, `--tile-face`, `--tile-shade`, `--tile-edge`, `--tile-ink`, `--hit`, `--mint`, `--combo-bg` …).
 - **Kachelfarbe je Buchstabe:** Tabelle `TILE_COLOR_BY_LETTER` in `src/render.js`
   (bleibt beim Schieben stabil, häufige Buchstaben sind auf alle vier Farben verteilt).
 - **Dialoge:** Bestätigung („Aktuelle Runde verwerfen?“), Teilen und Rundenende laufen über

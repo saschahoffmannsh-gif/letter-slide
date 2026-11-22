@@ -83,33 +83,75 @@
       this.tone(f * 1.5, 0.18, "sine", 0.06, 0.05);
     },
 
-    /** Zerbröseln: kurzes gefiltertes Rauschen (Körner-Rieseln), lauter bei mehr Kacheln. */
-    crumble(tiles = 3) {
+    /**
+     * Rieselgeräusch (Sand/Zucker), synchron zum Auflösen von oben nach unten.
+     * Granular: pro Kachel viele winzige Rausch-Körner (4–22 ms) mit zufälligem Timing,
+     * Tonhöhe (playbackRate) und Filterfrequenz über einen Bandpass; dazu ein leiser
+     * Rausch-Teppich. Hüllkurve folgt der Auflösedauer, Kacheln überlappen leicht.
+     * @param starts   Startzeiten der Kacheln in s (relativ zu jetzt)
+     * @param duration Auflösedauer pro Kachel in s
+     */
+    trickle(starts, duration = 0.46) {
       const ctx = this.ensure();
-      if (!ctx) return;
+      if (!ctx || !starts || !starts.length) return;
       try {
-        const dur = 0.32;
         if (!this._noise || this._noise.sampleRate !== ctx.sampleRate) {
-          const len = Math.floor(ctx.sampleRate * dur);
+          const len = Math.floor(ctx.sampleRate * 1.0);
           this._noise = ctx.createBuffer(1, len, ctx.sampleRate);
           const d = this._noise.getChannelData(0);
-          for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (Math.random() < 0.35 ? 1 : 0.25); // körnig
+          for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
         }
-        const src = ctx.createBufferSource();
-        src.buffer = this._noise;
-        const bp = ctx.createBiquadFilter();
-        bp.type = "bandpass";
-        bp.frequency.setValueAtTime(3200, ctx.currentTime);
-        bp.frequency.exponentialRampToValueAtTime(900, ctx.currentTime + dur);
-        bp.Q.value = 0.9;
-        const gain = ctx.createGain();
-        const vol = Math.min(0.16, 0.05 + tiles * 0.012);
-        gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(vol, ctx.currentTime + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
-        src.connect(bp).connect(gain).connect(ctx.destination);
-        src.start();
-        src.stop(ctx.currentTime + dur + 0.02);
+        const now = ctx.currentTime + 0.01;
+        // gemeinsame Kette: Hochpass (nimmt Rumpeln) -> Master-Lautstärke
+        const hp = ctx.createBiquadFilter();
+        hp.type = "highpass"; hp.frequency.value = 1400; hp.Q.value = 0.7;
+        const master = ctx.createGain();
+        master.gain.value = Math.min(0.5, 0.22 + 0.4 / starts.length); // moderat, auch bei vielen Kacheln
+        hp.connect(master).connect(ctx.destination);
+        const bufDur = this._noise.duration;
+        const env = (x) => Math.sin(Math.PI * Math.min(1, Math.max(0, x))); // 0 -> 1 -> 0
+
+        for (const s0 of starts) {
+          const t0 = now + s0, d = duration * 1.1; // leicht überlappend
+          // 1) leiser Rausch-Teppich mit Hüllkurve über die Auflösedauer
+          const bed = ctx.createBufferSource();
+          bed.buffer = this._noise;
+          const bedBp = ctx.createBiquadFilter();
+          bedBp.type = "bandpass"; bedBp.Q.value = 0.8;
+          bedBp.frequency.setValueAtTime(5200, t0);
+          bedBp.frequency.linearRampToValueAtTime(3200, t0 + d); // wird zum Ende hin etwas dunkler
+          const bedGain = ctx.createGain();
+          bedGain.gain.setValueAtTime(0.0001, t0);
+          bedGain.gain.linearRampToValueAtTime(0.05, t0 + d * 0.3);
+          bedGain.gain.linearRampToValueAtTime(0.0001, t0 + d);
+          bed.connect(bedBp).connect(bedGain).connect(hp);
+          bed.start(t0, Math.random() * (bufDur - d - 0.05));
+          bed.stop(t0 + d + 0.02);
+
+          // 2) Körner: dichter in der Mitte der Auflösung
+          const count = 34;
+          for (let k = 0; k < count; k++) {
+            const x = Math.random();
+            if (Math.random() > 0.35 + 0.65 * env(x)) continue;
+            const gt = t0 + x * d;
+            const gd = 0.004 + Math.random() * 0.018;
+            const src = ctx.createBufferSource();
+            src.buffer = this._noise;
+            src.playbackRate.value = 0.6 + Math.random() * 1.2;   // Tonhöhe variieren
+            const bp = ctx.createBiquadFilter();
+            bp.type = "bandpass";
+            bp.frequency.value = 2400 + Math.random() * 5200;
+            bp.Q.value = 1.5 + Math.random() * 4;
+            const g = ctx.createGain();
+            const peak = (0.12 + Math.random() * 0.3) * (0.4 + 0.6 * env(x));
+            g.gain.setValueAtTime(0.0001, gt);
+            g.gain.exponentialRampToValueAtTime(peak, gt + 0.0015); // knackiger Einsatz
+            g.gain.exponentialRampToValueAtTime(0.0001, gt + gd);
+            src.connect(bp).connect(g).connect(hp);
+            src.start(gt, Math.random() * (bufDur - 0.05));
+            src.stop(gt + gd + 0.01);
+          }
+        }
       } catch (_) { /* Sound ist optional */ }
     },
 

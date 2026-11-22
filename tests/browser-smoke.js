@@ -60,6 +60,26 @@ const particlesCleared = (page) => page.waitForFunction(() => {
   for (let i = 3; i < d.length; i += 16) if (d[i] !== 0) return false;
   return true;
 }, { timeout: 5000 }).then(() => true, () => false);
+/**
+ * Canvas über einer zerfallenden Kachel auswerten: Deckung (Anteil deckender Pixel) oben/unten
+ * und die Grenze des intakten Rests (erste Zeile von oben, ab der die Kachel geschlossen ist).
+ */
+const sampleDissolve = (page, k = 0) => page.evaluate((k) => {
+  const t = LetterSlideParticles.debugTiles()[k];
+  if (!t) return null;
+  const c = document.getElementById("particles");
+  const dpr = c.width / innerWidth;
+  const x0 = Math.round((t.x + t.w * 0.15) * dpr), w = Math.round(t.w * 0.7 * dpr);
+  const y0 = Math.round(t.y * dpr), h = Math.round(t.h * dpr);
+  const d = c.getContext("2d").getImageData(x0, y0, w, h).data;
+  const rowCov = [];
+  for (let y = 0; y < h; y++) { let n = 0; for (let x = 0; x < w; x++) if (d[(y * w + x) * 4 + 3] > 200) n++; rowCov.push(n / w); }
+  const band = (a, b) => { const r = rowCov.slice(Math.floor(a * h), Math.ceil(b * h)); return r.reduce((s, v) => s + v, 0) / r.length; };
+  let boundary = 1;
+  for (let y = 0; y < h - 2; y++) if (rowCov[y] > 0.97 && rowCov[y + 1] > 0.97 && rowCov[y + 2] > 0.97) { boundary = y / h; break; }
+  return { progress: t.progress, top: band(0, 0.15), bottom: band(0.82, 0.95), boundary };
+}, k);
+
 const screenIs = (page, name) => page.evaluate((n) => LetterSlideApp.screen === n && !document.getElementById(n).hidden, name);
 const waitScreen = (page, name) => page.waitForFunction((n) => LetterSlideApp.screen === n && !document.getElementById(n).classList.contains("off") && !document.getElementById(n).hidden, { timeout: 5000 }, name);
 
@@ -97,8 +117,9 @@ async function desktopFile(browser) {
 
   ok(await page.$$eval("#board .tile", (t) => t.length) === 36, "36 Kacheln sichtbar");
   ok(await page.$$eval("button.arrow", (t) => t.length === 24 && t.every((b) => b.querySelector("svg use"))), "24 Randpfeile mit SVG-Icon");
-  ok(await page.$$eval("#board .tile", (t) => new Set(t.map((x) => [...x.classList].find((c) => /^c\d$/.test(c)))).size) >= 3, "Kacheln in mehreren Pastellfarben");
-  ok(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--tile-0").trim().toUpperCase() === "#BFE6D3"), "Theme-Variablen aktiv");
+  ok(await page.$$eval("#board .tile .face", (fs) => fs.every((f) => { const c = getComputedStyle(f); return c.backgroundImage.includes("rgb(255, 255, 255)") && c.color === "rgb(74, 52, 38)"; })), "alle 36 Kacheln weiß mit dunkelbraunem Buchstaben");
+  ok(await page.$$eval("#board .tile", (ts) => ts.every((t) => !/\bc\d\b/.test(t.className))), "keine Pastell-Kachelklassen mehr");
+  ok(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--tile-face").trim().toUpperCase() === "#FFFFFF"), "Theme-Variable --tile-face aktiv");
   ok((await page.$eval("#stat-mode", (e) => e.textContent)).startsWith("Tagesrätsel #"), "Modus Tagesrätsel");
   const start = (await state(page)).grid;
   ok(start === await page.evaluate(() => LetterSlideLogic.startDaily().grid.join("")), "Tagesbrett deterministisch");
@@ -128,6 +149,9 @@ async function desktopFile(browser) {
   const spawned = await page.evaluate((b) => ({ alive: LetterSlideParticles.alive, spawned: LetterSlideParticles.spawnedTotal - b }), before);
   ok(spawned.alive > 0 && spawned.spawned >= 100, `Partikel gespawnt (${spawned.spawned} Körner, ${spawned.alive} aktiv)`);
   ok(spawned.alive <= LetterSlideParticlesMax, "Partikel-Limit eingehalten");
+  await page.waitForFunction(() => { const t = LetterSlideParticles.debugTiles()[0]; return t && t.progress >= 0.5; }, { polling: "raf", timeout: 3000 });
+  const mid = await sampleDissolve(page, 0);
+  ok(mid && mid.top < 0.35 && mid.bottom > 0.9, `Auflösen von oben: bei ${Math.round(mid.progress * 100)} % oben ${Math.round(mid.top * 100)} % Deckung, unten ${Math.round(mid.bottom * 100)} % (intakt)`);
   await idle(page);
   ok((await state(page)).score > 0, "Treffer erzielt (Score " + (await state(page)).score + ")");
   ok(await particlesCleared(page), "Partikel verschwinden, Canvas danach leer, rAF gestoppt");
@@ -311,26 +335,27 @@ async function iphone(browser) {
   ok(await page.evaluate(() => !!LetterSlideAudio.ctx), "AudioContext nach erster Berührung angelegt (iOS-Unlock)");
   await shot(page, "iphone.png");
 
-  // Zerbröseln festhalten: mehrere Frames mitten im Zerfall
+  // Auflösen von oben nach unten in Zeitlupe (×0,25) festhalten: 25 %, 50 %, 80 %
+  await page.evaluate(() => { LetterSlideParticles.timeScale = 0.25; });
   const b0 = await playUntilScore(page, (sel) => page.tap(sel));
   ok(b0 !== null, "Treffer-Zug gefunden");
   if (b0 !== null) {
     await page.waitForSelector("#board .tile.hit", { timeout: 3000 });
-    if (SHOTS) await page.screenshot({ path: path.join(SHOTS, "iphone-crumble-0-glow.png") });
-    await page.waitForFunction(() => LetterSlideParticles.alive > 0, { timeout: 3000 });
-    const t0 = Date.now();
-    const frames = [];
-    for (const [k, at] of [[1, 15], [2, 140], [3, 330]]) {
-      const waitMs = at - (Date.now() - t0);
-      if (waitMs > 0) await new Promise((r) => setTimeout(r, waitMs));
-      const alive = await page.evaluate(() => LetterSlideParticles.alive);
-      frames.push(`${Date.now() - t0}ms:${alive}`);
-      if (SHOTS) await page.screenshot({ path: path.join(SHOTS, `iphone-crumble-${k}.png`), optimizeForSpeed: true });
+    if (SHOTS) await page.screenshot({ path: path.join(SHOTS, "iphone-dissolve-00-glow.png") });
+    const samples = [];
+    for (const pct of [25, 50, 80]) {
+      await page.waitForFunction((p) => { const t = LetterSlideParticles.debugTiles()[0]; return t && t.progress >= p / 100; }, { polling: "raf", timeout: 8000 }, pct);
+      const smp = await sampleDissolve(page, 0);
+      samples.push(smp);
+      if (SHOTS) await page.screenshot({ path: path.join(SHOTS, `iphone-dissolve-${pct}.png`) });
     }
-    ok(true, "Zerbröseln-Frames: " + frames.join(", "));
+    const desc = samples.map((x) => `${Math.round(x.progress * 100)}%: Rest ab ${Math.round(x.boundary * 100)}%`).join(", ");
+    ok(samples[0].boundary < samples[1].boundary && samples[1].boundary < samples[2].boundary, "Front wandert von oben nach unten (" + desc + ")");
+    ok(samples[0].bottom > 0.9 && samples[1].bottom > 0.9, "unterer Teil bleibt bis zur Mitte intakt (25 %/50 %)");
     await idle(page);
-    ok(await particlesCleared(page), "Canvas nach dem Zerbröseln wieder leer");
+    ok(await particlesCleared(page), "Canvas nach dem Auflösen wieder leer");
   }
+  await page.evaluate(() => { LetterSlideParticles.timeScale = 1; });
 
   // Dialoge auf dem iPhone: Menü-Rückfrage + Teilen, Buttons >= 44 px, passt in den Viewport
   await page.tap("#btn-menu");

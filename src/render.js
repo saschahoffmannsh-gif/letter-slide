@@ -12,7 +12,8 @@
 
   /** Animationsdauern (ms). */
   /*   flash   = kurzes goldenes Aufleuchten vor dem Zerbröseln
-   *   crumble = Wartezeit bis die Kacheln sichtbar zerfallen sind -> dann Gravitation
+   *   crumble = Mindest-Wartezeit; tatsächlich wird gewartet, bis die Auflöse-Front
+   *             aller Kacheln unten angekommen ist (particles.js) -> dann Gravitation
    *   vanish  = einfaches Ausblenden (Fallback bei prefers-reduced-motion) */
   const ANIM = { slide: 120, flash: 150, crumble: 300, vanish: 180, fall: 150, wordHold: 700, comboHold: 750 };
   const Particles = root.LetterSlideParticles;
@@ -80,8 +81,7 @@
     /** Eine Kachel an Zelle (r, c) erzeugen (Position in %, damit translate(100%) = ein Feld). */
     makeTile(letter, r, c) {
       const t = document.createElement("div");
-      // Pastellfarbe hängt am Buchstaben -> bleibt beim Schieben/Fallen stabil
-      t.className = letter == null ? "tile" : `tile c${tileColor(letter)}`;
+      t.className = "tile"; // alle Kacheln weiß (Farben: --tile-* in style.css)
       t.style.left = `${(c * 100) / GRID_SIZE}%`;
       t.style.top = `${(r * 100) / GRID_SIZE}%`;
       t.dataset.r = r;
@@ -162,12 +162,14 @@
         const order = new Map();
         for (const m of step.matches) m.cells.forEach((cell, k) => { if (!order.has(cell)) order.set(cell, k); });
         const items = [...order].map(([cell, k]) => ({ el: tiles.get(cell), order: k }));
-        const released = Particles.crumble(items);
-        for (const { el } of items) el.classList.add("crumbled"); // DOM-Kachel weg, Körner übernehmen
-        if (Sound && Sound.crumble) Sound.crumble(items.length);
-        await wait(Math.max(ANIM.crumble, Math.min(420, released * 1000 * 0.85)));
+        const { duration, starts } = Particles.crumble(items); // Canvas zeichnet die Kacheln ab jetzt
+        for (const { el } of items) el.classList.add("crumbled"); // DOM-Kachel weg, Canvas übernimmt
+        if (Sound && Sound.trickle) Sound.trickle(starts, Particles.DISSOLVE_S);
+        // Gravitation erst, wenn die Front aller Kacheln unten angekommen ist (Körner rieseln weiter)
+        await wait(Math.max(ANIM.crumble, duration * 1000));
       } else {
         for (const i of step.cleared) tiles.get(i).classList.add("vanish");
+        if (Sound && Sound.trickle) Sound.trickle([0], 0.2);
         await wait(ANIM.vanish);
       }
     },
@@ -297,22 +299,6 @@
       if (res) res(value);
     }
   };
-
-  /*
-   * Pastell-Index 0..3 je Buchstabe (0 Mint, 1 Pfirsich, 2 Lavendel, 3 Butter – Farben: --tile-0..3
-   * in style.css). Die Zuordnung verteilt die häufigen deutschen Buchstaben (E, N, I, S, R, A …)
-   * auf alle vier Farben, damit das Brett bunt gemischt aussieht. Hängt nur am Buchstaben,
-   * deshalb bleibt die Farbe beim Schieben und Fallen stabil.
-   */
-  const TILE_COLOR_BY_LETTER = {
-    E: 0, T: 0, L: 0, O: 0, K: 0, J: 0,
-    N: 1, A: 1, H: 1, G: 1, W: 1, Z: 1, X: 1,
-    I: 2, R: 2, C: 2, M: 2, F: 2, V: 2, Q: 2,
-    S: 3, D: 3, U: 3, B: 3, P: 3, Y: 3
-  };
-  function tileColor(letter) {
-    return TILE_COLOR_BY_LETTER[letter] ?? 0;
-  }
 
   /** Kleiner HTML-Escaper für Dialog-Inhalte. */
   function esc(str) {

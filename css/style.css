@@ -25,11 +25,12 @@
   --title-b-deep: #9076C9;
   --heart: #F5A0B0;
 
-  /* --- Kachel-Pastelle (Farbe je Buchstabe, bleibt beim Schieben stabil) --- */
-  --tile-0: #BFE6D3; --tile-0-deep: #93CDB2;   /* Mint */
-  --tile-1: #FCCDB4; --tile-1-deep: #EDA987;   /* Pfirsich */
-  --tile-2: #D8CCF3; --tile-2-deep: #B5A3E2;   /* Lavendel */
-  --tile-3: #FBE7A2; --tile-3-deep: #E9CB6E;   /* Butter */
+  /* --- Buchstaben-Kacheln: alle weiß (auch die Körner beim Zerbröseln nutzen diese Werte) --- */
+  --tile-face: #FFFFFF;          /* Kachelfläche */
+  --tile-shade: #F6F1EA;         /* leichter Verlauf unten auf der Fläche */
+  --tile-edge: #E2D8CB;          /* warmgraue Unterkante (Tiefe) */
+  --tile-ink: #4A3426;           /* Buchstabe */
+  --tile-sel-line: #F4EFFD;      /* Zeile/Spalte der Auswahl */
   --hit: #FFCF3A; --hit-deep: #F0A818; --hit-glow: rgba(255, 196, 40, .75); /* Treffer-Gold */
   --select: #8B6FD0;
 
@@ -115,15 +116,15 @@ svg.ic { width: 20px; height: 20px; flex: none; }
 .title-big .t-slide { text-shadow: 0 2px 0 #fff, 0 5px 0 var(--title-b-deep), 0 10px 16px var(--shadow); }
 .bob-row { display: flex; gap: 8px; margin-top: 4px; }
 .bob {
-  --c: var(--tile-0); --d: var(--tile-0-deep);
+  --c: var(--tile-face); --d: var(--tile-edge);
   width: 48px; height: 48px; border-radius: 13px; display: flex; align-items: center; justify-content: center;
-  font-size: 1.7rem; font-weight: 900; color: var(--ink); background: var(--c);
+  font-size: 1.7rem; font-weight: 900; color: var(--tile-ink); background: linear-gradient(var(--tile-face) 55%, var(--tile-shade));
   box-shadow: inset 0 2px 0 rgba(255,255,255,.6), 0 4px 0 var(--d), 0 6px 10px var(--shadow);
   animation: bob 2.4s ease-in-out infinite;
 }
-.bob.c1 { --c: var(--tile-1); --d: var(--tile-1-deep); animation-delay: -.6s; }
-.bob.c2 { --c: var(--tile-2); --d: var(--tile-2-deep); animation-delay: -1.2s; }
-.bob.c3 { --c: var(--tile-3); --d: var(--tile-3-deep); animation-delay: -1.8s; }
+.bob:nth-child(2) { animation-delay: -.6s; }
+.bob:nth-child(3) { animation-delay: -1.2s; }
+.bob:nth-child(4) { animation-delay: -1.8s; }
 @keyframes bob { 0%, 100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-7px) rotate(2deg); } }
 .start-tagline { margin: 2px 0 0; color: var(--ink-soft); font-size: .95rem; text-align: center; }
 .start-actions { display: flex; flex-direction: column; gap: 12px; width: min(100%, 340px); }
@@ -265,18 +266,16 @@ button.arrow:active:not(:disabled) .arrow-key { transform: translateY(2px); box-
 /* Jede Kachel ist exakt eine Zelle groß -> translate(100%) = genau ein Feld */
 .tile { position: absolute; width: calc(100% / 6); height: calc(100% / 6); padding: 3px 3px 6px; will-change: transform; }
 .tile .face {
-  --c: var(--tile-0); --d: var(--tile-0-deep);
-  width: 100%; height: 100%; border-radius: 13px; background: var(--c); color: var(--ink);
+  --c: var(--tile-face); --d: var(--tile-edge);
+  width: 100%; height: 100%; border-radius: 13px; color: var(--tile-ink);
+  background: linear-gradient(var(--c) 55%, var(--tile-shade));
   display: flex; align-items: center; justify-content: center;
   font-weight: 900; font-size: calc(var(--board) / 6 * .52); line-height: 1;
-  box-shadow: inset 0 2px 0 rgba(255,255,255,.6), inset 0 -2px 0 rgba(0,0,0,.04), 0 4px 0 var(--d), 0 5px 7px var(--shadow);
+  box-shadow: 0 0 0 1px rgba(74,52,38,.05), inset 0 -2px 0 rgba(74,52,38,.03), 0 4px 0 var(--d), 0 5px 8px var(--shadow);
   transition: background-color .12s, transform .18s, opacity .18s, box-shadow .12s;
   cursor: pointer;
 }
-.tile.c1 .face { --c: var(--tile-1); --d: var(--tile-1-deep); }
-.tile.c2 .face { --c: var(--tile-2); --d: var(--tile-2-deep); }
-.tile.c3 .face { --c: var(--tile-3); --d: var(--tile-3-deep); }
-.tile.sel-line .face { filter: brightness(1.05) saturate(1.15); }
+.tile.sel-line .face { --c: var(--tile-sel-line); }
 .tile.sel .face { outline: 3px solid var(--select); outline-offset: -3px; }
 /* Treffer: golden aufleuchten, dann weich ausblenden */
 .tile.hit .face {
