@@ -20,6 +20,13 @@
 
   /** localStorage kann (Privatmodus, file:// in manchen Browsern) fehlen oder werfen. */
   const storage = (() => { try { const s = root.localStorage; s.getItem("x"); return s; } catch (_) { return null; } })();
+  // Link mit ?reset: kompletten Spielstand (Fortschritt, Tutorial, Tipps, Statistik) löschen, Ton-Einstellung bleibt.
+  try {
+    if (storage && /[?&]reset(=|&|$)/.test(root.location.search)) {
+      storage.removeItem(Stats.STORAGE_KEY);
+      root.history.replaceState(null, "", root.location.pathname + root.location.hash);
+    }
+  } catch (_) { /* egal */ }
   let stats = Stats.loadStats(storage);
   const save = () => Stats.saveStats(storage, stats);
 
